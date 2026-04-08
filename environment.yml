@@ -1,0 +1,12 @@
+name: CLASS
+channels:
+  - defaults
+dependencies:
+  - matplotlib
+  - python=3.11
+  - numpy
+  - scipy
+  - scikit-image
+  - pytorch
+  - ipykernel
+prefix: C:\Users\Lab account\miniconda3\envs\CLASS
