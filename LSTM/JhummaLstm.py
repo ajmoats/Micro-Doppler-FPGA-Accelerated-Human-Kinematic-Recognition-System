@@ -27,8 +27,9 @@ import csv
 import h5py
 import string
 
-from theano import function, config, shared, sandbox
-import theano.sandbox.cuda.basic_ops
+# Note: theano is a discontinued module, update wrappers/backend as necessary
+# from theano import function, config, shared, sandbox
+# import theano.sandbox.cuda.basic_ops
 import matplotlib.pyplot as plt
 
 import LSTM.data_loading as data_loading
