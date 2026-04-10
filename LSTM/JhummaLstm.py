@@ -168,7 +168,7 @@ def train_lstm(user_params=None):
 		hist = model.fit(train_x, train_y,
 		        validation_data = (valid_x, valid_y),
 		        batch_size=params['bsize'], show_accuracy=True,
-		        nb_epoch = params['nepochs'],
+		        epochs=params['nepochs'], # previously nb_epoch = params['nepochs']
 		        shuffle=params['shuffle'],
 		        verbose=params['verbose'])
 
