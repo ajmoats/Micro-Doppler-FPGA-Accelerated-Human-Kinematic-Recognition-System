@@ -158,7 +158,7 @@ def train_lstm(user_params=None):
 		model.add(LSTM(output_dim=params['lstm_layers'][-1]))
 		model.add(Dropout(params['dropout'][-1]))
 		print('Adding layer ' + str(params['lstm_layers'][-1]))
-		model.add(Dense(15)) # was 21
+		model.add(Dense(16)) # was 21
 		model.add(Activation('softmax'))
 		print('Compiling model...')
 		model.compile(loss='categorical_crossentropy',
