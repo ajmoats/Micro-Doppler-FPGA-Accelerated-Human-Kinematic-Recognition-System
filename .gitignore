@@ -1,1 +1,5 @@
+*.sh
 *.mat
+*.h5
+*.pickle
+/data/
