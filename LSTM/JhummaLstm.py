@@ -30,6 +30,8 @@ import string
 # Note: theano is a discontinued module, update wrappers/backend as necessary
 # from theano import function, config, shared, sandbox
 # import theano.sandbox.cuda.basic_ops
+import os
+os.environ['KERAS_BACKEND'] = 'tensorflow' # replaces theano
 import matplotlib.pyplot as plt
 
 import LSTM.data_loading as data_loading
