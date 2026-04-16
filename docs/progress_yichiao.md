@@ -3,33 +3,47 @@
 ## Project
 Micro-Doppler FPGA-Accelerated Human Kinematic Recognition System
 
-## Current Goal
-First reproduce a working software baseline in Python, then compare settings and decide what can be improved or simplified before thinking about FPGA acceleration.
+## Current Objective
+The current goal is to first reproduce a stable software baseline in Python, then compare model settings and sensor inputs before deciding what parts are worth improving or simplifying for possible FPGA-related work later.
 
-## What I finished today
+---
 
-### 1. Environment setup
+## 1. Environment and Setup
+
+### Environment
 - Created a new conda environment: `mies_yichiao`
 - Installed the main packages needed for the PyTorch test version
 - Fixed the NumPy compatibility issue by downgrading NumPy to a 1.x version
 
-### 2. Safe test setup
-To avoid modifying the original files, I created separate test files:
+### Safe test setup
+To avoid modifying the original repository files, I created separate test versions:
 - `LSTM/data_loading_yichiao.py`
 - `LSTM/JhummaLstm_yichiao.py`
 - `LSTM/test_run_yichiao.py`
 
-This lets me test the pipeline without touching the original repo files.
+This allows me to test the training pipeline safely without changing the original code.
 
-### 3. Baseline smoke test ran successfully
-I successfully ran a first training smoke test with:
+---
+
+## 2. Why a Separate Test Version Was Needed
+
+The original LSTM training code and the current data loader are not fully matched.
+
+- The original `JhummaLstm.py` is based on older Keras/TensorFlow-style code and expects an older loader format.
+- The current `data_loading.py` is already updated for a 16-class setup and returns single-sensor data, labels, and batch IDs.
+
+Because of this mismatch, I created a separate PyTorch-based `yichiao` version in order to get a working baseline first.
+
+---
+
+## 3. Initial Smoke Test
+
+### Setting
 - sensor: `US40`
 - folds: `[0]`
 - epochs: `1`
 - batch size: `50`
 - max length: `404`
-
-## Current result
 
 ### Dataset summary
 - train samples: `1648`
@@ -40,54 +54,20 @@ I successfully ran a first training smoke test with:
 - train min / mean / max: `22 / 117.86 / 400`
 - valid min / mean / max: `22 / 117.90 / 404`
 
-### Training result
+### Result
 - train loss: `2.2709`
 - train accuracy: `0.2518`
-
-### Validation result
 - valid loss: `1.6507`
 - valid accuracy: `0.4515`
 
-## Interpretation
-This means the baseline pipeline is now running successfully.
+### Interpretation
+This confirmed that the pipeline was working correctly.
 
-Even with only 1 epoch, the validation accuracy already reached about `45.15%`, which is much higher than random guessing for 16 classes. So the model is learning meaningful information from the data.
+Even with only 1 epoch, the validation accuracy already reached `45.15%`, which is much higher than random guessing for a 16-class problem. This showed that the model was learning meaningful information from the data.
 
-## Important notes
-The original LSTM code and the current data loader are not fully matched:
-- `JhummaLstm.py` is older Keras/TensorFlow-style code and expects the older loader format. :contentReference[oaicite:0]{index=0}
-- The current `data_loading.py` is already updated for a 16-class setup and returns single-sensor data, labels, and batch IDs. :contentReference[oaicite:1]{index=1}
+---
 
-Because of this, I used my own `yichiao` version for the first working baseline test.
-
-## Next steps
-1. Run the same setting with more epochs
-   - try `5` epochs first
-   - then try `10` epochs
-
-2. Compare different sensor settings
-   - `US25`
-   - `US33`
-   - `US40`
-   - `all`
-
-3. After choosing a better setting, run full 5-fold evaluation
-
-4. Based on the baseline results, decide what to improve next
-   - model settings
-   - preprocessing
-   - sensor combination
-   - possible FPGA-friendly simplification later
-
-## Status
-- Environment setup: done
-- First smoke test: done
-- Software baseline reproduction: started successfully
-- Parameter comparison: not started yet
-- FPGA-related work: not started yet
-
-
-## Update: 5-epoch baseline run
+## 4. 5-Epoch Baseline Run on US40
 
 ### Setting
 - sensor: `US40`
@@ -105,48 +85,56 @@ Because of this, I used my own `yichiao` version for the first working baseline 
 - Epoch 4: train acc = `0.6317`, valid acc = `0.6893`
 - Epoch 5: train acc = `0.6784`, valid acc = `0.6505`
 
-### Current observation
-The model is clearly learning useful information from the dataset.  
-Validation accuracy improved steadily from epoch 1 to epoch 4, reaching a best value of `68.93%`, but then dropped slightly at epoch 5 to `65.05%`.
+### Observation
+The model improved steadily from epoch 1 to epoch 4, reaching its best validation accuracy of `68.93%` at epoch 4. At epoch 5, the validation accuracy dropped slightly to `65.05%`, which may suggest mild overfitting under this setting.
 
-This suggests that:
-- the baseline pipeline is working well,
-- the model performance is already much better than random guessing,
-- and slight overfitting may begin after around 4 epochs under the current setting.
-
-### Current best result
+### Current best result for US40
 - best validation accuracy: `68.93%`
 - achieved at: `epoch 4`
 
-### Next step
-The next step is to compare sensor settings:
+---
+
+## 5. Sensor Comparison
+
+To determine which input setting provides the strongest baseline, I compared the following options under the same configuration:
 - `US25`
 - `US33`
 - `US40`
 - `all`
 
-using the same basic configuration, then decide which input setting is the strongest baseline.
+### Common setting
+- epochs: `5`
+- folds: `[0]`
+- hidden size: `400`
+- batch size: `50`
+- max length: `404`
+- dropout: `0.5`
+- learning rate: `1e-3`
 
-
-## Sensor comparison
+### Results
 
 | Sensor | Epochs | Best Valid Acc | Best Epoch | Final Valid Acc | Notes |
-|-------|--------|----------------|------------|-----------------|-------|
-| US25  | 5      | 78.40%         | 5          | 78.40%          | best single sensor |
-| US33  | 5      | 75.73%         | 5          | 75.73%          | second best single sensor |
-| US40  | 5      | 68.93%         | 4          | 65.05%          | slight overfitting after epoch 4 |
-| all   | 5      | 97.82%         | 4 or 5     | 97.82%          | strongest overall result |
+|--------|--------|----------------|------------|-----------------|-------|
+| US25   | 5      | 78.40%         | 5          | 78.40%          | Best single sensor |
+| US33   | 5      | 75.73%         | 5          | 75.73%          | Second best single sensor |
+| US40   | 5      | 68.93%         | 4          | 65.05%          | Slight overfitting after epoch 4 |
+| all    | 5      | 97.82%         | 4 or 5     | 97.82%          | Strongest overall result |
 
+### Interpretation
+Using all three sensors together performs much better than using any single sensor alone. This strongly suggests that combining the three sensor inputs provides much richer and more discriminative information for classification.
 
+---
 
-## 5-fold result with all sensors
+## 6. 5-Fold Baseline with All Sensors
+
+Since `all` gave the best result in the sensor comparison, I used it for a more formal 5-fold evaluation.
 
 ### Setting
 - sensor: `all` (`US25 + US33 + US40`)
 - model: `1-layer LSTM`
 - hidden size: `400`
 - epochs: `5`
-- folds: `5`
+- folds: `[0, 1, 2, 3, 4]`
 - batch size: `50`
 - max length: `404`
 - dropout: `0.5`
@@ -160,18 +148,48 @@ using the same basic configuration, then decide which input setting is the stron
 - Fold 4: `96.84%`
 
 ### Summary
-- Mean final validation accuracy: `97.23%`
-- Range: `96.84%` to `97.82%`
+- mean final validation accuracy: `97.23%`
+- range: `96.84%` to `97.82%`
 
-### Observation
-Using all three sensors together gives much better performance than using only a single sensor.  
-The 5-fold results are also very consistent, which suggests that the current baseline is stable and reliable.
+### Interpretation
+The 5-fold results are very consistent, which suggests that the current baseline is both stable and reliable. At this point, the strongest software baseline is clearly the all-sensor configuration.
 
-### Current conclusion
+---
+
+## 7. Current Baseline Conclusion
+
 The current best software baseline is:
-- all sensors
-- 1-layer LSTM with 400 hidden units
-- 5 epochs
-- 5-fold cross-validation
 
-This will be used as the main baseline before trying further improvements or FPGA-related simplifications.
+- input: all sensors (`US25 + US33 + US40`)
+- model: 1-layer LSTM
+- hidden size: `400`
+- epochs: `5`
+- evaluation: 5-fold cross-validation
+- mean final validation accuracy: `97.23%`
+
+This is now the main baseline that can be used for future comparison.
+
+---
+
+## 8. Next Steps
+
+Possible next steps include:
+
+1. Save and organize the current baseline results more formally
+2. Add confusion matrix or per-class analysis
+3. Try smaller or simpler models to see whether similar performance can be achieved with lower complexity
+4. Compare whether fewer epochs or reduced input settings still give strong accuracy
+5. Start thinking about which parts of the pipeline may be more FPGA-friendly later
+
+---
+
+## 9. Current Status
+
+- Environment setup: done
+- Safe test version (`yichiao` files): done
+- Initial smoke test: done
+- 5-epoch single-sensor baseline: done
+- Sensor comparison: done
+- 5-fold all-sensor baseline: done
+- Model simplification experiments: not started yet
+- FPGA-related work: not started yet
