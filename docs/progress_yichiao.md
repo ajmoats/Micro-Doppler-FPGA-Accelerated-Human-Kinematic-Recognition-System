@@ -126,3 +126,52 @@ The next step is to compare sensor settings:
 - `all`
 
 using the same basic configuration, then decide which input setting is the strongest baseline.
+
+
+## Sensor comparison
+
+| Sensor | Epochs | Best Valid Acc | Best Epoch | Final Valid Acc | Notes |
+|-------|--------|----------------|------------|-----------------|-------|
+| US25  | 5      | 78.40%         | 5          | 78.40%          | best single sensor |
+| US33  | 5      | 75.73%         | 5          | 75.73%          | second best single sensor |
+| US40  | 5      | 68.93%         | 4          | 65.05%          | slight overfitting after epoch 4 |
+| all   | 5      | 97.82%         | 4 or 5     | 97.82%          | strongest overall result |
+
+
+
+## 5-fold result with all sensors
+
+### Setting
+- sensor: `all` (`US25 + US33 + US40`)
+- model: `1-layer LSTM`
+- hidden size: `400`
+- epochs: `5`
+- folds: `5`
+- batch size: `50`
+- max length: `404`
+- dropout: `0.5`
+- learning rate: `1e-3`
+
+### Final validation accuracy by fold
+- Fold 0: `97.82%`
+- Fold 1: `96.84%`
+- Fold 2: `97.82%`
+- Fold 3: `96.84%`
+- Fold 4: `96.84%`
+
+### Summary
+- Mean final validation accuracy: `97.23%`
+- Range: `96.84%` to `97.82%`
+
+### Observation
+Using all three sensors together gives much better performance than using only a single sensor.  
+The 5-fold results are also very consistent, which suggests that the current baseline is stable and reliable.
+
+### Current conclusion
+The current best software baseline is:
+- all sensors
+- 1-layer LSTM with 400 hidden units
+- 5 epochs
+- 5-fold cross-validation
+
+This will be used as the main baseline before trying further improvements or FPGA-related simplifications.
