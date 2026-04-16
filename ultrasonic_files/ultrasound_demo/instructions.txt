@@ -1,0 +1,16 @@
+MATLAB (script_us.m):
+
+From the front (sensors and antenna):
+USB is connected on the left (which is the right looking from the back)
+Transmitter is on left, receiver on right
+
+Fix Com port number.
+
+CMD:
+
+D:
+cd \Users\Mendat\ultrasound_demo\
+dacq_spga <COM#> <gain (1,2,4,...)> normal
+dacq2pipe <COM#>
+
+Run MATLAB Script
