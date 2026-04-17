@@ -13,6 +13,8 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+import glob 
+import scipy.io
 
 import data_loading_yichiao as data_loading
 
@@ -24,6 +26,44 @@ def set_seed(seed=1337):
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
 
+def load_person_files(data_dir):
+    all_x = []
+    all_y_action = []
+    all_y_person = []
+
+    # Map the initials to a unique person ID
+    person_map = {}
+    current_person_id = 0
+    
+    file_paths = glob.glob(f"{data_dir}/data_rot_*.mat")
+
+    for path in file_paths:
+        # Obtain the filename for parsing
+        filename = path.split("/")[-1]
+        parts = filename.replace(".mat", "").split("_")
+
+        # Ensure the file format naming convention is correct
+        initials = parts[2]  # e.g., "AB"
+        action = parts[3]    # e.g., "walk" 
+
+        # Assign int ID to person based on initials
+        if initials not in person_map:
+            person_map[initials] = current_person_id
+            current_person_id += 1
+
+        person_id = person_map[initials]
+
+        # Load the .mat file data
+        mat_data = scipy.io.loadmat(path)
+
+        # Replace 'data' with the actual key in the .mat file that contains the sensor data
+        signal = mat_data['data']  # shape: (timesteps, features)
+
+        all_x.append(signal)
+        all_y_action.append(action)
+        all_y_person.append(person_id)
+
+        return all_x, np.array(all_y_action), np.array(all_y_person), person_map
 
 class SequenceDataset(Dataset):
     def __init__(self, x, y, lengths):
