@@ -15,6 +15,10 @@ The current goal is to first reproduce a stable software baseline in Python, the
 - Installed the main packages needed for the PyTorch test version
 - Fixed the NumPy compatibility issue by downgrading NumPy to a 1.x version
 
+conda create -n mies_yichiao python=3.11
+conda activate mies_yichiao
+conda install numpy=1.26 scipy matplotlib scikit-image ipykernel pytorch -c pytorch
+
 ### Safe test setup
 To avoid modifying the original repository files, I created separate test versions:
 - `LSTM/data_loading_yichiao.py`
