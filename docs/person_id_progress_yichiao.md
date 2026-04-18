@@ -202,3 +202,68 @@ After finding a stronger configuration:
 - first 5-epoch US40 person-ID baseline: done
 - all-sensor person-ID baseline: not started yet
 - single-action person-ID baseline: not started yet
+
+
+## Update: Person-ID baseline with all sensors
+
+### Setting
+- task: person identification
+- sensor: `all` (`US25 + US33 + US40`)
+- version: `1`
+- actions: `1~21`
+- model: `1-layer LSTM`
+- hidden size: `400`
+- fold: `0`
+- epochs: `5`
+- batch size: `16`
+
+### Dataset summary
+#### Train fold 0
+- num_samples: `157`
+- num_classes: `10`
+- feature dimension: `983`
+- sequence length min / mean / max:
+  - `248 / 1098.34 / 4004`
+
+#### Valid fold 0
+- num_samples: `48`
+- num_classes: `10`
+- feature dimension: `983`
+- sequence length min / mean / max:
+  - `263 / 1138.25 / 3590`
+
+### Empty samples skipped
+The same empty samples were skipped as before:
+- `data_rot_bb_1.mat`: action 1, action 2
+- `data_rot_mc_1.mat`: action 4, action 5, action 21
+
+### Results by epoch
+- Epoch 1: train acc = `0.1847`, valid acc = `0.2917`
+- Epoch 2: train acc = `0.7516`, valid acc = `0.5000`
+- Epoch 3: train acc = `0.9108`, valid acc = `0.5625`
+- Epoch 4: train acc = `0.9682`, valid acc = `0.6042`
+- Epoch 5: train acc = `0.9618`, valid acc = `0.6458`
+
+### Best result so far
+- best valid accuracy: `64.58%`
+- best epoch: `5`
+
+### Interpretation
+This result is much stronger than the earlier `US40`-only baseline.
+
+Comparison:
+- `US40` only: best valid accuracy = `20.83%`
+- `all` sensors: best valid accuracy = `64.58%`
+
+This suggests that multi-sensor fusion is very important for person identification. Even though the model still shows signs of overfitting, combining all three sensors gives a major improvement over using only one sensor.
+
+### Current conclusion
+The current best person-identification baseline is:
+- version `1` only
+- actions `1~21`
+- all sensors combined
+- 1-layer LSTM
+- 5 epochs
+- fold 0 best valid accuracy = `64.58%`
+
+This is now the strongest person-ID baseline so far, and the next step is to run full 5-fold evaluation.
