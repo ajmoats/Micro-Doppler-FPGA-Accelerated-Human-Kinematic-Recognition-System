@@ -156,6 +156,8 @@ def load_person_dataset(
     version=1,
     action_indices=None,
     data_dir=None,
+    window_len=None,
+    stride=None,
 ):
     """
     Build person-ID dataset.
@@ -209,20 +211,50 @@ def load_person_dataset(
                 )
                 continue
 
-            data_list.append(sample)
-            label_list.append(person_id)
-            metadata.append(
-                {
-                    "file_name": file_path.name,
-                    "person": person,
-                    "person_id": person_id,
-                    "action_idx_1based": action_idx + 1,
-                    "action_name": action_names[action_idx],
-                    "sensor": sensor,
-                    "seq_len": int(sample.shape[0]),
-                    "feat_dim": int(sample.shape[1]),
-                }
-            )
+            # windowed version
+            if window_len is not None and stride is not None:
+                windows = make_windows(sample, window_len=window_len, stride=stride)
+
+                if len(windows) == 0:
+                    print(
+                        f"Skipping too-short sample | file={file_path.name} | "
+                        f"person={person} | action_idx={action_idx+1} | "
+                        f"action_name={action_names[action_idx]} | sensor={sensor} | "
+                        f"seq_len={sample.shape[0]}"
+                    )
+                    continue
+
+                for w_idx, w in enumerate(windows):
+                    data_list.append(w)
+                    label_list.append(person_id)
+                    metadata.append(
+                        {
+                            "file_name": file_path.name,
+                            "person": person,
+                            "person_id": person_id,
+                            "action_idx_1based": action_idx + 1,
+                            "action_name": action_names[action_idx],
+                            "sensor": sensor,
+                            "seq_len": int(w.shape[0]),
+                            "feat_dim": int(w.shape[1]),
+                            "window_idx": w_idx,
+                        }
+                    )
+            else:
+                data_list.append(sample)
+                label_list.append(person_id)
+                metadata.append(
+                    {
+                        "file_name": file_path.name,
+                        "person": person,
+                        "person_id": person_id,
+                        "action_idx_1based": action_idx + 1,
+                        "action_name": action_names[action_idx],
+                        "sensor": sensor,
+                        "seq_len": int(sample.shape[0]),
+                        "feat_dim": int(sample.shape[1]),
+                    }
+                )
 
     x = np.array(data_list, dtype=object)
     y = np.array(label_list, dtype=np.int64)
@@ -372,3 +404,21 @@ def print_dataset_summary(x, y, metadata, id_to_person, title="dataset"):
     print("samples per action:")
     for action_name, cnt in action_count.items():
         print(f"  {action_name}: {cnt}")
+
+
+def make_windows(seq, window_len=200, stride=100):
+    """
+    seq: (T, F)
+    returns a list of windows, each shape (window_len, F)
+    """
+    T, F = seq.shape
+
+    if T < window_len:
+        return []
+
+    windows = []
+    for start in range(0, T - window_len + 1, stride):
+        end = start + window_len
+        windows.append(seq[start:end, :])
+
+    return windows

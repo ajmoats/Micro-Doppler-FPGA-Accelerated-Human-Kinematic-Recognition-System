@@ -142,6 +142,8 @@ def train_person_lstm(user_params=None):
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": None,
         "print_summary": True,
+        "window_len": None,
+        "stride": None,
     }
 
     if user_params:
@@ -162,6 +164,8 @@ def train_person_lstm(user_params=None):
         version=params["version"],
         action_indices=params["action_indices"],
         data_dir=params["data_dir"],
+        window_len=params["window_len"],
+        stride=params["stride"],
     )
 
     x_all = data_loading.normalize(x_all, metadata)
