@@ -5,7 +5,7 @@ separate to prevent data leakage between training and validation.
 """
 
 import PersonLstm_yichiao as runner
-import data_loading_person_yichiao as data_loading
+import data_loading_person_split_yichiao as data_loading
 
 def run_source_separated_test():
     # 1. Basic configuration (using windowing for single-action focus)

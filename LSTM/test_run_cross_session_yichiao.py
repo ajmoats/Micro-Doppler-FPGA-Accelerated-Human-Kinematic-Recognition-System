@@ -6,7 +6,7 @@ and evaluates performance on 'Day 2' (Version 2) recordings.
 
 import numpy as np
 import PersonLstm_yichiao as runner
-import data_loading_person_yichiao as data_loading
+import data_loading_person_split_yichiao as data_loading
 
 def run_cross_session_test():
     params = {
