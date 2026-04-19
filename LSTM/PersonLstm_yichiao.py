@@ -1,5 +1,6 @@
 """
 PyTorch LSTM for person identification.
+Updated to support manual data splits for Source-Separation and Cross-Session testing.
 """
 
 import random
@@ -16,7 +17,7 @@ def set_seed(seed=1337):
     np.random.seed(seed)
     torch.manual_seed(seed)
     if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
+        torch.manual_seed_all(seed)
 
 
 class SequenceDataset(Dataset):
@@ -124,7 +125,11 @@ def evaluate(model, loader, criterion, device):
     return total_loss / total_count, total_correct / total_count
 
 
-def train_person_lstm(user_params=None):
+def train_person_lstm(user_params=None, manual_split=None):
+    """
+    Main training entry point.
+    If manual_split is provided, the function skips automatic loading/splitting.
+    """
     params = {
         "sensor_data": "US40",
         "version": 1,
@@ -158,29 +163,47 @@ def train_person_lstm(user_params=None):
         print(f"{k}: {v}")
     print("===============================================\n")
 
-    # Load dataset
-    x_all, y_all, metadata, person_to_id, id_to_person, action_names = data_loading.load_person_dataset(
-        sensor=params["sensor_data"],
-        version=params["version"],
-        action_indices=params["action_indices"],
-        data_dir=params["data_dir"],
-        window_len=params["window_len"],
-        stride=params["stride"],
-    )
-
-    x_all = data_loading.normalize(x_all, metadata)
-    fold_indices = data_loading.make_stratified_folds(
-        y_all, n_splits=5, seed=params["seed"]
-    )
+    # --- DATA HANDLING ---
+    if manual_split is not None:
+        print(">>> Using manual data split (Source-Separated or Cross-Session)")
+        # Unpack the pre-split data from the calling script
+        m_train_x, m_train_y, m_valid_x, m_valid_y, m_train_meta, m_valid_meta = manual_split
+        
+        # Derive person mappings from the metadata
+        unique_p = sorted(set([m['person'] for m in m_train_meta]))
+        person_to_id = {p: i for i, p in enumerate(unique_p)}
+        id_to_person = {i: p for p, i in person_to_id.items()}
+        
+        # Override to ensure we only run the provided split (as 'Fold 0')
+        params["folds"] = [0]
+    else:
+        # Standard workflow: Load full dataset from disk
+        x_all, y_all, metadata, person_to_id, id_to_person, action_names = data_loading.load_person_dataset(
+            sensor=params["sensor_data"],
+            version=params["version"],
+            action_indices=params["action_indices"],
+            data_dir=params["data_dir"],
+            window_len=params["window_len"],
+            stride=params["stride"],
+        )
+        x_all = data_loading.normalize(x_all, metadata)
+        fold_indices = data_loading.make_stratified_folds(
+            y_all, n_splits=5, seed=params["seed"]
+        )
 
     results = []
 
     for fold in params["folds"]:
         print(f"\n===== FOLD {fold} =====")
 
-        train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_fold_split(
-            x_all, y_all, metadata, fold_indices, fold=fold
-        )
+        if manual_split is not None:
+            train_x, train_y = m_train_x, m_train_y
+            valid_x, valid_y = m_valid_x, m_valid_y
+            train_meta, valid_meta = m_train_meta, m_valid_meta
+        else:
+            train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_fold_split(
+                x_all, y_all, metadata, fold_indices, fold=fold
+            )
 
         if params["print_summary"]:
             data_loading.print_dataset_summary(
@@ -190,6 +213,7 @@ def train_person_lstm(user_params=None):
                 valid_x, valid_y, valid_meta, id_to_person, title=f"valid fold {fold}"
             )
 
+        # Preprocessing for Torch
         train_x_pad, train_y_out, train_lengths = data_loading.pad_for_torch(
             train_x, train_y, max_len=params["max_len"], mask_val=params["mask_val"]
         )
