@@ -7,6 +7,8 @@ via stronger regualarization methods, such as:
 4. Reduced Learning Rate: carefully extract biometric features from noisy data
 
 PyTorch LSTM for person identification.
+
+***Note: removed tm for corrupt file***
 """
 
 
@@ -14,6 +16,7 @@ import random
 import numpy as np
 import torch
 import torch.nn as nn
+from tqdm import tqdm # for progress bars
 from torch.utils.data import Dataset, DataLoader
 
 import data_loading_person_yichiao as data_loading
@@ -89,7 +92,10 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
     total_correct = 0
     total_count = 0
 
-    for x_batch, y_batch, lengths in loader:
+    # Wrap loader to see progress
+    pbar = tqdm(loader, desc="Training", leave=False)
+
+    for x_batch, y_batch, lengths in pbar:
         x_batch = x_batch.to(device)
         y_batch = y_batch.to(device)
         lengths = lengths.to(device)
@@ -104,6 +110,8 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         preds = logits.argmax(dim=1)
         total_correct += (preds == y_batch).sum().item()
         total_count += y_batch.size(0)
+
+        pbar.set_postfix(loss=f"{loss.item():.4f}")
 
     return total_loss / total_count, total_correct / total_count
 
@@ -145,12 +153,12 @@ def train_person_lstm(user_params=None):
         "seed": 1337,
         "dropout": 0.5,
         "bsize": 16,
-        "max_len": None,
+        "max_len": 1500,  # changed from none  to 1500 to speed up training
         "lr": 1e-4, # lower LR from 1e-3 for finer feature extraction
         "weight_decay": 1e-4, # added weight decay for regularization from 0 to penalize complex weights
         "mask_val": 0.0,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "data_dir": None,
+        "data_dir": "/home/amoats3/Micro-Doppler-FPGA-Accelerated-Human-Kinematic-Recognition-System/data", # changed to where my data is
         "print_summary": True,
         "window_len": None,
         "stride": None,
@@ -244,6 +252,7 @@ def train_person_lstm(user_params=None):
 
          # Changed by adding in early stopping logic
         best_valid_acc = -1.0
+        best_valid_loss = float('inf') # track best validation loss for early stopping
         best_epoch = -1
         trigger_times = 0 # counter for early stopping patience
         for epoch in range(params["nepochs"]):
