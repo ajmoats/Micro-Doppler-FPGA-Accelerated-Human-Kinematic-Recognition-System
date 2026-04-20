@@ -1,23 +1,14 @@
 """
-The goal of this code is to see if we can bridge the LSTM validation gap by ~30%
-via stronger regualarization methods, such as:
-1. Weight Decay: penalizes large weights, encouraging simpler models that are less likely to overfit noise
-2. Dropout: randomly zeroes out activations during training, forcing the model to learn more robust features that generalize better to unseen data
-3. Early Stopping: stops training when validation performance degrades, preventing overfitting to noise
-4. Reduced Learning Rate: carefully extract biometric features from noisy data
-
 PyTorch LSTM for person identification.
-
-***Note: removed tm for corrupt file***
+Updated for numerical stability (Gradient Clipping) and Source-Separation.
 """
-
 
 import random
 import numpy as np
 import torch
 import torch.nn as nn
-from tqdm import tqdm # for progress bars
 from torch.utils.data import Dataset, DataLoader
+from tqdm import tqdm
 
 import data_loading_person_yichiao as data_loading
 
@@ -32,6 +23,7 @@ def set_seed(seed=1337):
 
 class SequenceDataset(Dataset):
     def __init__(self, x, y, lengths):
+        # Keep as tensors for speed
         self.x = torch.tensor(x, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.long)
         self.lengths = torch.tensor(lengths, dtype=torch.long)
@@ -46,9 +38,7 @@ class SequenceDataset(Dataset):
 class LSTMClassifier(nn.Module):
     def __init__(self, input_dim, hidden_dim=400, num_layers=1, dropout=0.5, num_classes=10):
         super().__init__()
-
         lstm_dropout = dropout if num_layers > 1 else 0.0
-
         self.lstm = nn.LSTM(
             input_size=input_dim,
             hidden_size=hidden_dim,
@@ -73,13 +63,6 @@ class LSTMClassifier(nn.Module):
 def _parse_lstm_layers(lstm_layers):
     if not lstm_layers:
         raise ValueError("lstm_layers cannot be empty")
-
-    if len(set(lstm_layers)) != 1:
-        raise ValueError(
-            "This version only supports equal hidden sizes across layers, "
-            "e.g. [400] or [200, 200]."
-        )
-
     hidden_dim = lstm_layers[0]
     num_layers = len(lstm_layers)
     return hidden_dim, num_layers
@@ -87,30 +70,32 @@ def _parse_lstm_layers(lstm_layers):
 
 def train_one_epoch(model, loader, optimizer, criterion, device):
     model.train()
-
-    total_loss = 0.0
-    total_correct = 0
-    total_count = 0
-
-    # Wrap loader to see progress
+    total_loss, total_correct, total_count = 0.0, 0, 0
+    
+    # Using tqdm for visibility as it helps track those 6-10 min epochs
     pbar = tqdm(loader, desc="Training", leave=False)
 
     for x_batch, y_batch, lengths in pbar:
-        x_batch = x_batch.to(device)
-        y_batch = y_batch.to(device)
-        lengths = lengths.to(device)
+        x_batch, y_batch, lengths = x_batch.to(device), y_batch.to(device), lengths.to(device)
 
         optimizer.zero_grad()
         logits = model(x_batch, lengths)
         loss = criterion(logits, y_batch)
+        
+        if torch.isnan(loss):
+            continue
+
         loss.backward()
+        
+        # --- STABILITY FIX: Gradient Clipping ---
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
+        
         optimizer.step()
 
         total_loss += loss.item() * y_batch.size(0)
         preds = logits.argmax(dim=1)
         total_correct += (preds == y_batch).sum().item()
         total_count += y_batch.size(0)
-
         pbar.set_postfix(loss=f"{loss.item():.4f}")
 
     return total_loss / total_count, total_correct / total_count
@@ -119,46 +104,36 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
 @torch.no_grad()
 def evaluate(model, loader, criterion, device):
     model.eval()
-
-    total_loss = 0.0
-    total_correct = 0
-    total_count = 0
-
+    total_loss, total_correct, total_count = 0.0, 0, 0
     for x_batch, y_batch, lengths in loader:
-        x_batch = x_batch.to(device)
-        y_batch = y_batch.to(device)
-        lengths = lengths.to(device)
-
+        x_batch, y_batch, lengths = x_batch.to(device), y_batch.to(device), lengths.to(device)
         logits = model(x_batch, lengths)
         loss = criterion(logits, y_batch)
-
         total_loss += loss.item() * y_batch.size(0)
         preds = logits.argmax(dim=1)
         total_correct += (preds == y_batch).sum().item()
         total_count += y_batch.size(0)
-
     return total_loss / total_count, total_correct / total_count
 
 
-# Updated configuation defaults to set more conservative training points
-def train_person_lstm(user_params=None):
+def train_person_lstm(user_params=None, manual_split=None):
     params = {
         "sensor_data": "US40",
         "version": 1,
-        "action_indices": list(range(21)),   # actions 1~21 only
+        "action_indices": list(range(21)),
         "lstm_layers": [400],
-        "nepochs": 50, # increased from 1 to 50 to allow early stopping to work
-        "patience": 5, # stop if there is no improvement in validation for 5 epochs
+        "nepochs": 50,
+        "patience": 5,
         "folds": [0],
         "seed": 1337,
         "dropout": 0.5,
         "bsize": 16,
-        "max_len": 1500,  # changed from none  to 1500 to speed up training
-        "lr": 1e-4, # lower LR from 1e-3 for finer feature extraction
-        "weight_decay": 1e-4, # added weight decay for regularization from 0 to penalize complex weights
+        "max_len": None, # If None, pad_for_torch uses max of current fold
+        "lr": 1e-4,
+        "weight_decay": 1e-4,
         "mask_val": 0.0,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
-        "data_dir": "/home/amoats3/Micro-Doppler-FPGA-Accelerated-Human-Kinematic-Recognition-System/data", # changed to where my data is
+        "data_dir": None,
         "print_summary": True,
         "window_len": None,
         "stride": None,
@@ -171,141 +146,73 @@ def train_person_lstm(user_params=None):
     device = torch.device(params["device"])
     hidden_dim, num_layers = _parse_lstm_layers(params["lstm_layers"])
 
-    print("\n========== person-id training config ==========")
-    for k, v in params.items():
-        print(f"{k}: {v}")
-    print("===============================================\n")
-
-    # Load dataset
-    x_all, y_all, metadata, person_to_id, id_to_person, action_names = data_loading.load_person_dataset(
-        sensor=params["sensor_data"],
-        version=params["version"],
-        action_indices=params["action_indices"],
-        data_dir=params["data_dir"],
-        window_len=params["window_len"],
-        stride=params["stride"],
-    )
-
-    x_all = data_loading.normalize(x_all, metadata)
-    fold_indices = data_loading.make_stratified_folds(
-        y_all, n_splits=5, seed=params["seed"]
-    )
+    # --- DATA HANDLING ---
+    if manual_split is not None:
+        m_train_x, m_train_y, m_valid_x, m_valid_y, m_train_meta, m_valid_meta = manual_split
+        unique_p = sorted(set([m['person'] for m in m_train_meta]))
+        person_to_id = {p: i for i, p in enumerate(unique_p)}
+        id_to_person = {i: p for p, i in person_to_id.items()}
+        params["folds"] = [0]
+    else:
+        x_all, y_all, metadata, person_to_id, id_to_person, action_names = data_loading.load_person_dataset(
+            sensor=params["sensor_data"], version=params["version"],
+            action_indices=params["action_indices"], data_dir=params["data_dir"]
+        )
+        x_all = data_loading.normalize(x_all, metadata)
+        # Use updated fold logic (metadata-based)
+        fold_indices = data_loading.make_stratified_folds(metadata, n_splits=5, seed=params["seed"])
 
     results = []
 
     for fold in params["folds"]:
-        print(f"\n===== FOLD {fold} =====")
-
-        train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_fold_split(
-            x_all, y_all, metadata, fold_indices, fold=fold
-        )
-
-        if params["print_summary"]:
-            data_loading.print_dataset_summary(
-                train_x, train_y, train_meta, id_to_person, title=f"train fold {fold}"
-            )
-            data_loading.print_dataset_summary(
-                valid_x, valid_y, valid_meta, id_to_person, title=f"valid fold {fold}"
+        if manual_split is not None:
+            train_x, train_y, valid_x, valid_y = m_train_x, m_train_y, m_valid_x, m_valid_y
+            train_meta, valid_meta = m_train_meta, m_valid_meta
+        else:
+            train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_fold_split(
+                x_all, y_all, metadata, fold_indices, fold=fold
             )
 
-        train_x_pad, train_y_out, train_lengths = data_loading.pad_for_torch(
-            train_x, train_y, max_len=params["max_len"], mask_val=params["mask_val"]
-        )
-        valid_x_pad, valid_y_out, valid_lengths = data_loading.pad_for_torch(
-            valid_x, valid_y, max_len=params["max_len"], mask_val=params["mask_val"]
-        )
+        train_x_pad, train_y_out, train_lengths = data_loading.pad_for_torch(train_x, train_y, max_len=params["max_len"])
+        valid_x_pad, valid_y_out, valid_lengths = data_loading.pad_for_torch(valid_x, valid_y, max_len=params["max_len"])
 
         train_ds = SequenceDataset(train_x_pad, train_y_out, train_lengths)
         valid_ds = SequenceDataset(valid_x_pad, valid_y_out, valid_lengths)
 
-        train_loader = DataLoader(
-            train_ds,
-            batch_size=params["bsize"],
-            shuffle=True,
-            drop_last=False,
-        )
-        valid_loader = DataLoader(
-            valid_ds,
-            batch_size=params["bsize"],
-            shuffle=False,
-            drop_last=False,
-        )
+        train_loader = DataLoader(train_ds, batch_size=params["bsize"], shuffle=True)
+        valid_loader = DataLoader(valid_ds, batch_size=params["bsize"], shuffle=False)
 
-        input_dim = train_x_pad.shape[2]
-        num_classes = len(person_to_id)
-
-        model = LSTMClassifier(
-            input_dim=input_dim,
-            hidden_dim=hidden_dim,
-            num_layers=num_layers,
-            dropout=params["dropout"],
-            num_classes=num_classes,
-        ).to(device)
-
-        # Changes to the optimizer to add in weight decay for regularization
+        model = LSTMClassifier(train_x_pad.shape[2], hidden_dim, num_layers, params["dropout"], len(person_to_id)).to(device)
+        optimizer = torch.optim.Adam(model.parameters(), lr=params["lr"], weight_decay=params["weight_decay"])
         criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(
-            model.parameters(),
-            lr=params["lr"],
-            weight_decay=params["weight_decay"], # Now 1e-4 to prevent over-relying on noise
-        )
 
-         # Changed by adding in early stopping logic
+        best_valid_loss = float('inf')
         best_valid_acc = -1.0
-        best_valid_loss = float('inf') # track best validation loss for early stopping
         best_epoch = -1
-        trigger_times = 0 # counter for early stopping patience
-        for epoch in range(params["nepochs"]):
-            train_loss, train_acc = train_one_epoch(
-                model, train_loader, optimizer, criterion, device
-            )
-            valid_loss, valid_acc = evaluate(
-                model, valid_loader, criterion, device
-            )
+        trigger_times = 0
 
-            # Update best metrics for logging
+        for epoch in range(params["nepochs"]):
+            train_loss, train_acc = train_one_epoch(model, train_loader, optimizer, criterion, device)
+            valid_loss, valid_acc = evaluate(model, valid_loader, criterion, device)
+
             if valid_acc > best_valid_acc:
                 best_valid_acc = valid_acc
                 best_epoch = epoch + 1
 
-            print(
-                f"Epoch {epoch + 1}/{params['nepochs']} | "
-                f"train_loss={train_loss:.4f} train_acc={train_acc:.4f} | "
-                f"valid_loss={valid_loss:.4f} valid_acc={valid_acc:.4f}"
-            )
+            print(f"Epoch {epoch+1} | Train Acc: {train_acc:.4f} | Valid Acc: {valid_acc:.4f} | Valid Loss: {valid_loss:.4f}")
 
-            # Early stopping check
             if valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
-                trigger_times = 0 # Reset patience because we improved
+                trigger_times = 0
             else:
                 trigger_times += 1
                 if trigger_times >= params["patience"]:
-                    print(f"\n[Early Stopping] No improvement for {params['patience']} epochs. Stopping.")
+                    print(f"Early stopping at epoch {epoch+1}")
                     break
 
-        fold_result = {
-            "fold": fold,
-            "train_loss": train_loss,
-            "train_acc": train_acc,
-            "valid_loss": valid_loss,
-            "valid_acc": valid_acc,
-            "best_valid_acc": best_valid_acc,
-            "best_epoch": best_epoch,
-        }
-        results.append(fold_result)
-
-    print("\nDone.")
-    print("Fold results:")
-    for r in results:
-        print(r)
+        results.append({"fold": fold, "best_valid_acc": best_valid_acc, "best_epoch": best_epoch})
 
     return results
 
-
-def main():
-    train_person_lstm()
-
-
 if __name__ == "__main__":
-    main()
+    train_person_lstm()

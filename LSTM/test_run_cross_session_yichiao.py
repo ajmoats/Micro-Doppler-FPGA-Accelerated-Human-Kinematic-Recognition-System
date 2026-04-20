@@ -1,65 +1,50 @@
 """
 Priority 3: Cross-Session Testing (Version 2).
-This script trains the model on all 'Day 1' (Version 1) recordings 
-and evaluates performance on 'Day 2' (Version 2) recordings.
+Trains on 'Day 1' (V1) and evaluates on 'Day 2' (V2) for all people and actions.
 """
-
 import numpy as np
-import PersonLstm_yichiao as runner
+import torch
+import PersonLstm_split_yichiao as runner
 import data_loading_person_split_yichiao as data_loading
 
 def run_cross_session_test():
     params = {
         "sensor_data": "all",
-        "action_indices": list(range(21)), # Use all actions 1-21
+        "action_indices": list(range(21)), # All 21 Actions
         "lstm_layers": [400],
-        "nepochs": 30,
-        "patience": 5,
+        "nepochs": 5,                   # 5 Epochs
         "bsize": 16,
         "lr": 1e-4,
         "weight_decay": 1e-4,
-        "device": "cpu", 
+        "device": "mps" if torch.backends.mps.is_available() else "cpu", 
         "data_dir": "/home/amoats3/Micro-Doppler-FPGA-Accelerated-Human-Kinematic-Recognition-System/data"
     }
 
     print("--- Phase 1: Loading All Sessions ---")
     
-    # 1. Load Version 1 (Training Set)
-    x1, y1, meta1, p2id, id2p, _ = data_loading.load_person_dataset(
-        sensor=params["sensor_data"], version=1, data_dir=params["data_dir"]
-    )
+    # 1. Load V1 (Train)
+    x1, y1, m1, p2id, _, _ = data_loading.load_person_dataset(version=1, data_dir=params["data_dir"])
     
-    # 2. Load Version 2 (Testing Set)
-    # Note: We pass the same person_to_id mapping to ensure labels match
-    x2, y2, meta2, _, _, _ = data_loading.load_person_dataset(
-        sensor=params["sensor_data"], version=2, data_dir=params["data_dir"]
-    )
+    # 2. Load V2 (Test) using V1 mapping
+    x2, y2, m2, _, _, _ = data_loading.load_person_dataset(version=2, data_dir=params["data_dir"], person_to_id=p2id)
 
-    # 3. Concatenate and Split using our new logic
+    # 3. Create the Session-based Split
     x_all = np.concatenate([x1, x2], axis=0)
     y_all = np.concatenate([y1, y2], axis=0)
-    meta_all = meta1 + meta2
+    meta_all = m1 + m2
 
-    print(f"Total samples combined: {len(x_all)}")
-    
-    # Use the helper function added to data_loading_person_yichiao.py
-    train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_cross_session_split(
-        x_all, y_all, meta_all, train_version=1, test_version=2
-    )
+    tx, ty, vx, vy, tm, vm = data_loading.get_cross_session_split(x_all, y_all, meta_all)
 
-    # 4. Normalize based on Training Set stats
-    # (Important: only normalize using train stats to prevent future-data leakage)
-    train_x = data_loading.normalize(train_x, train_meta)
-    valid_x = data_loading.normalize(valid_x, valid_meta)
+    # 4. Normalize
+    tx = data_loading.normalize(tx, tm)
+    vx = data_loading.normalize(vx, vm)
 
-    print(f"\nTraining Samples (V1): {len(train_x)}")
-    print(f"Validation Samples (V2): {len(valid_x)}")
+    print(f"\nTraining Samples (V1): {len(tx)}")
+    print(f"Validation Samples (V2): {len(vx)}")
 
-    # 5. Execute Training
-    # Note: This will require a small tweak to your Runner to accept 
-    # pre-split data instead of reloading from disk.
+    # 5. Run Trainer
     print("\n--- Starting Cross-Session Evaluation ---")
-    runner.train_person_lstm(params)
+    runner.train_person_lstm(params, preloaded_data=(tx, ty, vx, vy, tm, vm))
 
 if __name__ == "__main__":
     run_cross_session_test()
