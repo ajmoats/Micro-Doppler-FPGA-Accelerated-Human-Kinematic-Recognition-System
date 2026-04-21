@@ -31,7 +31,7 @@ class SequenceDataset(Dataset):
 
 # --- MODEL DEFINITION ---
 class LSTMClassifier(nn.Module):
-    def __init__(self, input_dim, hidden_dim=400, num_classes=16):
+    def __init__(self, input_dim, hidden_dim=400, num_classes=16): # changed to 128 in second iteration
         super().__init__()
         self.lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, num_layers=1, batch_first=True)
         self.dropout = nn.Dropout(0.5)
