@@ -1,7 +1,7 @@
 """
 PyTorch LSTM for person identification.
 Updated to support manual data splits for Source-Separation and Cross-Session testing.
-Includes colorblind-friendly Viridis confusion matrix and per-person accuracy reporting.
+Includes Matplotlib-based Viridis confusion matrix and per-person accuracy reporting.
 """
 
 import random
@@ -9,7 +9,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import matplotlib.pyplot as plt
-import seaborn as sns
 from sklearn.metrics import confusion_matrix
 from tqdm import tqdm 
 from torch.utils.data import Dataset, DataLoader
@@ -100,7 +99,6 @@ def print_per_person_accuracy(all_labels, all_preds, id_to_person):
     for p_id in unique_ids:
         indices = [i for i, label in enumerate(all_labels) if label == p_id]
         if len(indices) == 0:
-            print(f"{id_to_person[p_id]:<10}: No samples in test set")
             continue
         correct = sum(1 for i in indices if all_preds[i] == all_labels[i])
         total = len(indices)
@@ -109,7 +107,7 @@ def print_per_person_accuracy(all_labels, all_preds, id_to_person):
     print("-------------------------------------------\n")
 
 def plot_confusion_matrix(all_labels, all_preds, id_to_person, title="Confusion Matrix"):
-    """Generates a colorblind-friendly heatmap using the Viridis scheme."""
+    """Generates a colorblind-friendly heatmap using only Matplotlib."""
     unique_ids = sorted(id_to_person.keys())
     person_names = [id_to_person[i] for i in unique_ids]
     cm = confusion_matrix(all_labels, all_preds, labels=unique_ids)
@@ -118,15 +116,33 @@ def plot_confusion_matrix(all_labels, all_preds, id_to_person, title="Confusion 
     cm_norm = np.divide(cm.astype('float'), cm.sum(axis=1)[:, np.newaxis], 
                         out=np.zeros_like(cm.astype('float')), where=cm.sum(axis=1)[:, np.newaxis]!=0)
 
-    plt.figure(figsize=(12, 10))
-    sns.heatmap(cm_norm, annot=True, fmt=".2f", cmap='viridis', 
-                xticklabels=person_names, yticklabels=person_names,
-                cbar_kws={'label': 'Identification Probability'})
+    fig, ax = plt.subplots(figsize=(10, 8))
+    im = ax.imshow(cm_norm, interpolation='nearest', cmap='viridis')
     
-    plt.title(f"{title}\nColorblind-Sensitive (Viridis)", fontsize=15)
-    plt.ylabel('True Person (Session 2)', fontsize=12)
-    plt.xlabel('Predicted Person (Session 1 Model)', fontsize=12)
-    plt.tight_layout()
+    # Add key (colorbar)
+    cbar = ax.figure.colorbar(im, ax=ax)
+    cbar.ax.set_ylabel("Probability", rotation=-90, va="bottom")
+
+    ax.set_xticks(np.arange(len(person_names)))
+    ax.set_yticks(np.arange(len(person_names)))
+    ax.set_xticklabels(person_names)
+    ax.set_yticklabels(person_names)
+
+    plt.setp(ax.get_xticklabels(), rotation=45, ha="right", rotation_mode="anchor")
+
+    # Annotate with probability values
+    fmt = '.2f'
+    thresh = cm_norm.max() / 2.
+    for i in range(len(person_names)):
+        for j in range(len(person_names)):
+            ax.text(j, i, format(cm_norm[i, j], fmt),
+                    ha="center", va="center",
+                    color="white" if cm_norm[i, j] > thresh else "black")
+    
+    ax.set_title(f"{title}\nColorblind-Friendly (Viridis)")
+    ax.set_ylabel('True Person (Session 2)')
+    ax.set_xlabel('Predicted Person (Session 1 Model)')
+    fig.tight_layout()
     plt.show()
 
 def train_person_lstm(user_params=None, preloaded_data=None):
@@ -208,7 +224,7 @@ def train_person_lstm(user_params=None, preloaded_data=None):
             best_acc = max(best_acc, v_acc)
             print(f"Fold {fold} | Epoch {epoch+1} | train_acc={t_acc:.4f} valid_acc={v_acc:.4f}")
 
-        # --- FINAL ANALYSIS AFTER TRAINING ---
+        # --- FINAL ANALYSIS ---
         model.eval()
         all_preds, all_actuals = [], []
         with torch.no_grad():
@@ -218,12 +234,8 @@ def train_person_lstm(user_params=None, preloaded_data=None):
                 all_preds.extend(logits.argmax(dim=1).cpu().numpy())
                 all_actuals.extend(y_batch.cpu().numpy())
         
-        # 1. Print Text Report
         print_per_person_accuracy(all_actuals, all_preds, id_to_person)
-        
-        # 2. Display Heatmap
-        plot_confusion_matrix(all_actuals, all_preds, id_to_person, 
-                              title="Cross-Session Person ID (V1 Train -> V2 Test)")
+        plot_confusion_matrix(all_actuals, all_preds, id_to_person, title="Cross-Session Person ID")
 
         results.append({"fold": fold, "best_valid_acc": best_acc})
     
