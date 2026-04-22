@@ -4,7 +4,7 @@ Trains on 'Day 1' (V1) and evaluates on 'Day 2' (V2) for all people and actions.
 """
 import numpy as np
 import torch
-import PersonLstm_split_yichiao as runner
+import LSTM.PersonLstm_split_gabrielle as runner
 import LSTM.data_loading_person_split_yichiao as data_loading
 
 def run_cross_session_test():

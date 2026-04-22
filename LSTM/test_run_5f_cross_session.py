@@ -1,7 +1,7 @@
 import numpy as np
 import torch
 import multiprocessing
-import PersonLstm_split_yichiao as personlstm 
+import LSTM.PersonLstm_split_gabrielle as personlstm 
 import data_loading_person_split_yichiao as data_loading
 
 def worker_task(i, seed, data_payload, params, return_dict):
