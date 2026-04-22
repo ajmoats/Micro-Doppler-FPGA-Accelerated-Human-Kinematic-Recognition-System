@@ -578,3 +578,28 @@ If we continue the single-action direction, improve the evaluation split so that
 - single-action person-ID supplementary experiment: done
 - cleaner source-separated single-action evaluation: not started yet
 - cross-session testing with version 2: not started yet
+
+---
+
+## 15. Cross-session testing w/ Version 2
+The testing accuracy dropped significantly when identifying the same person between different sessions. The results were as follows for 1 fold:
+- Epoch 1 | train_acc=0.1463 valid_acc=0.1310
+- Epoch 2 | train_acc=0.4195 valid_acc=0.2857
+- Epoch 3 | train_acc=0.5512 valid_acc=0.3214
+- Epoch 4 | train_acc=0.7024 valid_acc=0.3333
+- Epoch 5 | train_acc=0.7756 valid_acc=0.3214
+
+--- Per-Person Accuracy (Cross-Session) ---
+- dm        :  42.86% (9/21)
+- gg        :   9.52% (2/21)
+- ks        :  28.57% (6/21)
+- tm        :  47.62% (10/21)
+
+with the following settings:
+       - "sensor_data": "all",
+       - "action_indices": list(range(21)), # All 21 Actions
+       - "lstm_layers": [400],
+       - "nepochs": 5,                   # 5 Epochs
+       - "bsize": 16,
+       - "lr": 1e-4,
+       - "weight_decay": 1e-4,

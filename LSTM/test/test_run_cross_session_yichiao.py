@@ -28,7 +28,7 @@ def run_cross_session_test():
     # 2. Load V2 (Test) using V1 mapping
     x2, y2, m2, _, _, _ = data_loading.load_person_dataset(version=2, data_dir=params["data_dir"], person_to_id=p2id)
 
-    # 3. Create the Session-based Split
+    # 3. Create the Session-based Split=
     x_all = np.concatenate([x1, x2], axis=0)
     y_all = np.concatenate([y1, y2], axis=0)
     meta_all = m1 + m2

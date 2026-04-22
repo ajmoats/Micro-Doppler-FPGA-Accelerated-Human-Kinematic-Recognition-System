@@ -1,0 +1,85 @@
+{
+  "overall_accuracy": 0.34146341463414637,
+  "num_samples": 205,
+  "labels": [
+    "bb",
+    "dm",
+    "gg",
+    "gt",
+    "jm",
+    "jz",
+    "ks",
+    "mc",
+    "tf",
+    "tm"
+  ],
+  "per_class_accuracy": {
+    "bb": 0.15789473684210525,
+    "dm": 0.42857142857142855,
+    "gg": 0.2857142857142857,
+    "gt": 0.5714285714285714,
+    "jm": 0.14285714285714285,
+    "jz": 0.23809523809523808,
+    "ks": 0.2857142857142857,
+    "mc": 0.16666666666666666,
+    "tf": 0.5238095238095238,
+    "tm": 0.5714285714285714
+  },
+  "metadata": {
+    "task": "person_identification",
+    "sensor": "all",
+    "folds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "params": {
+      "sensor_data": "all",
+      "version": 1,
+      "action_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19
+      ],
+      "lstm_layers": [
+        400
+      ],
+      "nepochs": 1,
+      "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "seed": 1337,
+      "dropout": 0.5,
+      "bsize": 16,
+      "max_len": null,
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "mask_val": 0.0,
+      "device": "cpu",
+      "data_dir": null,
+      "print_summary": true,
+      "save_results": true,
+      "results_root": "results",
+      "experiment_name": "Split_Person_LSTM_ALL"
+    }
+  }
+}

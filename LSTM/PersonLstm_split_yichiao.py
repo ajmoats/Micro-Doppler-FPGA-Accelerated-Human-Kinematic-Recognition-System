@@ -1,6 +1,6 @@
 """
 PyTorch LSTM for person identification.
-Updated to support manual data splits for Source-Separation and Cross-Session testing.
+EMERGENCY VERSION: Synchronized for Parallel Execution.
 """
 
 import random
@@ -10,13 +10,7 @@ import torch.nn as nn
 from tqdm import tqdm  # for progress bars in terminal
 from torch.utils.data import Dataset, DataLoader
 
-try:
-    import LSTM.data_loading_person_split_yichiao as data_loading
-    import LSTM.eval_utils_yichiao as eval_utils
-except ModuleNotFoundError:
-    print("Module not found, trying local imports")
-    import data_loading_person_split_yichiao as data_loading
-    import eval_utils_yichiao as eval_utils
+import data_loading_person_split_yichiao as data_loading
 
 
 def set_seed(seed=1337):
@@ -26,38 +20,26 @@ def set_seed(seed=1337):
     if torch.cuda.is_available():
         torch.manual_seed_all(seed)
 
-
 class SequenceDataset(Dataset):
     def __init__(self, x, y, lengths):
         self.x = torch.tensor(x, dtype=torch.float32)
         self.y = torch.tensor(y, dtype=torch.long)
         self.lengths = torch.tensor(lengths, dtype=torch.long)
 
-    def __len__(self):
-        return len(self.y)
-
-    def __getitem__(self, idx):
-        return self.x[idx], self.y[idx], self.lengths[idx]
-
+    def __len__(self): return len(self.y)
+    def __getitem__(self, idx): return self.x[idx], self.y[idx], self.lengths[idx]
 
 class LSTMClassifier(nn.Module):
     def __init__(self, input_dim, hidden_dim=400, num_layers=1, dropout=0.5, num_classes=10):
         super().__init__()
         lstm_dropout = dropout if num_layers > 1 else 0.0
-        self.lstm = nn.LSTM(
-            input_size=input_dim,
-            hidden_size=hidden_dim,
-            num_layers=num_layers,
-            batch_first=True,
-            dropout=lstm_dropout,
-        )
+        self.lstm = nn.LSTM(input_size=input_dim, hidden_size=hidden_dim, 
+                            num_layers=num_layers, batch_first=True, dropout=lstm_dropout)
         self.dropout = nn.Dropout(dropout)
         self.fc = nn.Linear(hidden_dim, num_classes)
 
     def forward(self, x, lengths):
-        packed = nn.utils.rnn.pack_padded_sequence(
-            x, lengths.cpu(), batch_first=True, enforce_sorted=False
-        )
+        packed = nn.utils.rnn.pack_padded_sequence(x, lengths.cpu(), batch_first=True, enforce_sorted=False)
         _, (h_n, _) = self.lstm(packed)
         last_hidden = h_n[-1]
         out = self.dropout(last_hidden)
@@ -115,7 +97,7 @@ def collect_predictions(model, loader, device):
     return y_true, y_pred
 
 
-def train_person_lstm(user_params=None, preloaded_data=None):
+def train_person_lstm(user_params=None, preloaded_data=None, run_id="default"):
     params = {
         "sensor_data": "US40",
         "version": 1,

@@ -50,23 +50,27 @@ Completed dataset assumptions:
 - use actions `1` through `21`
 - exclude the last two freestyle actions
 
-Current completed person-ID result:
+Current completed person-ID results reflected in `results/`:
 
-- task: person identification
-- input: all three sensors combined
-- evaluation: 5-fold split baseline
-- documented mean validation accuracy: `66.35%` (`docs/person_id_progress_yichiao.md`)
+- `validation_person_smoke`: fold-0 smoke-test output for `US40`
+- `Split_Person_US40`: 5-fold person-ID run using `US40` only with aggregate accuracy `13.66%`
+- `Split_Person_LSTM_ALL`: 5-fold person-ID run using all sensors with aggregate accuracy `34.15%`
 
-This shows that person identification is feasible offline, but also much harder than action recognition.
+These saved runs show that person identification is feasible offline, and that combining all three sensors improves performance relative to `US40` alone in the current tracked results.
 
 ## 3. Evaluation and Reporting Improvements
 
 Supporting work has also been completed to make experiments easier to validate and review:
 
-- result folders are now populated under `results/`
+- result folders are now populated under `results/action_recognition/` and `results/person_identification/`
 - confusion matrices, normalized confusion matrices, history plots, and JSON summaries are being saved
 - shared reporting helpers were added in `LSTM/eval_utils_yichiao.py`
-- smoke-test outputs for both action recognition and person identification are present for quick validation
+- aggregate and per-fold outputs are present for:
+  - `action_recognition/baseline_all_5fold`
+  - `action_recognition/validation_action_smoke`
+  - `person_identification/validation_person_smoke`
+  - `person_identification/Split_Person_US40`
+  - `person_identification/Split_Person_LSTM_ALL`
 
 These changes make the experiments more reproducible and easier to compare across runs.
 
@@ -87,7 +91,7 @@ This improves separation between legacy reference code and the active experiment
 - A stable software baseline for action recognition has been completed.
 - Multi-sensor fusion is the strongest completed input configuration.
 - The repo now supports both action recognition and person identification workflows.
-- Person identification has been demonstrated offline with a dedicated pipeline and baseline results.
+- Person identification has been demonstrated offline with saved smoke-test, `US40`, and all-sensor result sets.
 - Result artifacts and plotting utilities are in place to support review and future comparisons.
 - The codebase has been cleaned up so active experiments, legacy code, and demo tooling are more clearly separated.
 
@@ -102,7 +106,8 @@ Completed:
 - person-ID data loading pipeline
 - person-ID baseline training pipeline
 - person-ID smoke testing
-- person-ID 5-fold all-sensor baseline
+- person-ID 5-fold `US40` baseline saved under `results/person_identification/Split_Person_US40`
+- person-ID 5-fold all-sensor baseline saved under `results/person_identification/Split_Person_LSTM_ALL`
 - saved evaluation artifacts and summary reports
 - live collection demo helper and documentation
 - repo organization for legacy vs. active experiment code
@@ -110,6 +115,6 @@ Completed:
 Not yet completed:
 
 - source-separated single-action evaluation cleanup
-- broader overfitting mitigation experiments
-- cross-session evaluation with version `2` files
+- broader overfitting mitigation experiments 
+- saved cross-session evaluation results with version `2` files **in progress**
 - FPGA-oriented model simplification or deployment work
