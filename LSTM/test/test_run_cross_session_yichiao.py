@@ -9,7 +9,7 @@ import LSTM.data_loading_person_split_yichiao as data_loading
 
 def run_cross_session_test():
     params = {
-        "sensor_data": "all",
+        "sensor_data": "25",
         "action_indices": list(range(21)), # All 21 Actions
         "lstm_layers": [400],
         "nepochs": 5,                   # 5 Epochs
