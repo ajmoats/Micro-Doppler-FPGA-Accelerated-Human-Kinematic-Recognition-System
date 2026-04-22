@@ -13,6 +13,7 @@ def run_cross_session_test():
         "action_indices": list(range(21)), # All 21 Actions
         "lstm_layers": [400],
         "nepochs": 5,                   # 5 Epochs
+        "folds": [0, 1, 2, 3, 4],
         "bsize": 16,
         "lr": 1e-4,
         "weight_decay": 1e-4,
