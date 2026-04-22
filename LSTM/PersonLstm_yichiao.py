@@ -9,8 +9,13 @@ import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 
-import data_loading_person_yichiao as data_loading
-
+try:
+    import LSTM.data_loading_person_split_yichiao as data_loading
+    import LSTM.eval_utils_yichiao as eval_utils
+except ModuleNotFoundError:
+    print("Module not found, trying local imports")
+    import data_loading_person_split_yichiao as data_loading
+    import eval_utils_yichiao as eval_utils
 
 def set_seed(seed=1337):
     random.seed(seed)
@@ -46,8 +51,12 @@ class LSTMClassifier(nn.Module):
             batch_first=True,
             dropout=lstm_dropout,
         )
-        self.dropout = nn.Dropout(dropout)
-        self.fc = nn.Linear(hidden_dim, num_classes)
+        # change dropout depending on models performance
+        #    High train acc, low valid acc  → Overfitting  → INCREASE dropout
+        #    Low train acc,  low valid acc  → Underfitting → DECREASE dropout
+        #    High train acc, high valid acc → Good fit     → Keep it
+        self.dropout = nn.Dropout(dropout) # regularization step
+        self.fc = nn.Linear(hidden_dim, num_classes) #final classifier
 
     def forward(self, x, lengths):
         packed = nn.utils.rnn.pack_padded_sequence(
@@ -75,7 +84,7 @@ def _parse_lstm_layers(lstm_layers):
     return hidden_dim, num_layers
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device):
+def train_one_epoch(model, loader, optimizer, criterion, device, grad_clip_norm=None):
     model.train()
 
     total_loss = 0.0
@@ -91,6 +100,8 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         logits = model(x_batch, lengths)
         loss = criterion(logits, y_batch)
         loss.backward()
+        if grad_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
         optimizer.step()
 
         total_loss += loss.item() * y_batch.size(0)
@@ -125,6 +136,22 @@ def evaluate(model, loader, criterion, device):
     return total_loss / total_count, total_correct / total_count
 
 
+@torch.no_grad()
+def collect_predictions(model, loader, device):
+    model.eval()
+
+    y_true = []
+    y_pred = []
+
+    for x_batch, y_batch, lengths in loader:
+        logits = model(x_batch.to(device), lengths.to(device))
+        preds = logits.argmax(dim=1).cpu().numpy()
+        y_true.extend(y_batch.cpu().numpy().tolist())
+        y_pred.extend(preds.tolist())
+
+    return y_true, y_pred
+
+
 def train_person_lstm(user_params=None, manual_split=None):
     """
     Main training entry point.
@@ -143,12 +170,17 @@ def train_person_lstm(user_params=None, manual_split=None):
         "max_len": None,
         "lr": 1e-3,
         "weight_decay": 0.0,
+        "grad_clip_norm": None,
+        "early_stopping_patience": None,
         "mask_val": 0.0,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "data_dir": None,
         "print_summary": True,
         "window_len": None,
         "stride": None,
+        "save_results": False,
+        "results_root": None,
+        "experiment_name": None,
     }
 
     if user_params:
@@ -163,7 +195,7 @@ def train_person_lstm(user_params=None, manual_split=None):
         print(f"{k}: {v}")
     print("===============================================\n")
 
-    # --- DATA HANDLING ---
+    # DATA HANDLING
     if manual_split is not None:
         print(">>> Using manual data split (Source-Separated or Cross-Session)")
         # Unpack the pre-split data from the calling script
@@ -186,12 +218,22 @@ def train_person_lstm(user_params=None, manual_split=None):
             window_len=params["window_len"],
             stride=params["stride"],
         )
-        x_all = data_loading.normalize(x_all, metadata)
+        # x_all = data_loading.normalize(x_all, metadata) causing leakage
         fold_indices = data_loading.make_stratified_folds(
             y_all, n_splits=5, seed=params["seed"]
         )
 
     results = []
+    aggregate_true = []
+    aggregate_pred = []
+    experiment_name = params["experiment_name"] or f"sensor_{params['sensor_data'].lower()}"
+    experiment_dir = None
+    if params["save_results"]:
+        experiment_dir = eval_utils.resolve_results_dir(
+            task_name="person_identification",
+            experiment_name=experiment_name,
+            results_root=params["results_root"],
+        )
 
     for fold in params["folds"]:
         print(f"\n===== FOLD {fold} =====")
@@ -204,6 +246,8 @@ def train_person_lstm(user_params=None, manual_split=None):
             train_x, train_y, valid_x, valid_y, train_meta, valid_meta = data_loading.get_fold_split(
                 x_all, y_all, metadata, fold_indices, fold=fold
             )
+
+
 
         if params["print_summary"]:
             data_loading.print_dataset_summary(
@@ -255,20 +299,45 @@ def train_person_lstm(user_params=None, manual_split=None):
             weight_decay=params["weight_decay"],
         )
 
+        label_names = [id_to_person[i] for i in range(num_classes)]
         best_valid_acc = -1.0
         best_epoch = -1
+        best_valid_loss = float("inf")
+        patience_counter = 0
+        history = []
 
         for epoch in range(params["nepochs"]):
             train_loss, train_acc = train_one_epoch(
-                model, train_loader, optimizer, criterion, device
+                model,
+                train_loader,
+                optimizer,
+                criterion,
+                device,
+                grad_clip_norm=params["grad_clip_norm"],
             )
             valid_loss, valid_acc = evaluate(
                 model, valid_loader, criterion, device
             )
 
+            history.append(
+                {
+                    "epoch": epoch + 1,
+                    "train_loss": float(train_loss),
+                    "train_acc": float(train_acc),
+                    "valid_loss": float(valid_loss),
+                    "valid_acc": float(valid_acc),
+                }
+            )
+
             if valid_acc > best_valid_acc:
                 best_valid_acc = valid_acc
                 best_epoch = epoch + 1
+
+            if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
 
             print(
                 f"Epoch {epoch + 1}/{params['nepochs']} | "
@@ -276,21 +345,75 @@ def train_person_lstm(user_params=None, manual_split=None):
                 f"valid_loss={valid_loss:.4f} valid_acc={valid_acc:.4f}"
             )
 
+            if (
+                params["early_stopping_patience"] is not None
+                and patience_counter >= params["early_stopping_patience"]
+            ):
+                print(f"Early stopping at epoch {epoch + 1}")
+                break
+
+        valid_true, valid_pred = collect_predictions(model, valid_loader, device)
+        aggregate_true.extend(valid_true)
+        aggregate_pred.extend(valid_pred)
+
         fold_result = {
             "fold": fold,
-            "train_loss": train_loss,
-            "train_acc": train_acc,
-            "valid_loss": valid_loss,
-            "valid_acc": valid_acc,
-            "best_valid_acc": best_valid_acc,
+            "train_loss": float(train_loss),
+            "train_acc": float(train_acc),
+            "valid_loss": float(valid_loss),
+            "valid_acc": float(valid_acc),
+            "best_valid_acc": float(best_valid_acc),
             "best_epoch": best_epoch,
+            "history": history,
+            "valid_true": valid_true,
+            "valid_pred": valid_pred,
+            "label_names": label_names,
         }
+
+        if experiment_dir is not None:
+            fold_dir = experiment_dir / f"fold_{fold}"
+            eval_utils.save_history(history, fold_dir)
+            report = eval_utils.save_classification_report(
+                valid_true,
+                valid_pred,
+                label_names,
+                fold_dir,
+                metadata={
+                    "task": "person_identification",
+                    "sensor": params["sensor_data"],
+                    "fold": fold,
+                    "params": params,
+                },
+            )
+            fold_result["report_summary_path"] = report["summary_path"]
+
         results.append(fold_result)
+
+    if experiment_dir is not None and aggregate_true:
+        eval_utils.save_classification_report(
+            aggregate_true,
+            aggregate_pred,
+            [id_to_person[i] for i in range(len(id_to_person))],
+            experiment_dir / "aggregate",
+            metadata={
+                "task": "person_identification",
+                "sensor": params["sensor_data"],
+                "folds": params["folds"],
+                "params": params,
+            },
+        )
 
     print("\nDone.")
     print("Fold results:")
     for r in results:
-        print(r)
+        print(
+            {
+                "fold": r["fold"],
+                "valid_acc": r["valid_acc"],
+                "best_valid_acc": r["best_valid_acc"],
+                "best_epoch": r["best_epoch"],
+            }
+        )
 
     return results
 

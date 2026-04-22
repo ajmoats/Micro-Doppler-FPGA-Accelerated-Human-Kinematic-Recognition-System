@@ -2,4 +2,7 @@
 *.mat
 *.h5
 *.pickle
+*.pyc
 /data/
+__pycache__/
+/LSTM/master-test-list.txt

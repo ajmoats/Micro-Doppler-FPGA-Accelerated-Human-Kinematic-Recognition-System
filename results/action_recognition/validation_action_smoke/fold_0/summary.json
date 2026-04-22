@@ -1,0 +1,71 @@
+{
+  "overall_accuracy": 0.45145631067961167,
+  "num_samples": 412,
+  "labels": [
+    "action_1",
+    "action_2",
+    "action_3",
+    "action_4",
+    "action_5",
+    "action_10",
+    "action_11",
+    "action_12",
+    "action_13",
+    "action_14",
+    "action_15",
+    "action_16",
+    "action_17",
+    "action_18",
+    "action_19",
+    "action_20"
+  ],
+  "per_class_accuracy": {
+    "action_1": 0.34615384615384615,
+    "action_2": 0.6538461538461539,
+    "action_3": 0.3076923076923077,
+    "action_4": 0.0,
+    "action_5": 0.625,
+    "action_10": 0.6153846153846154,
+    "action_11": 0.19230769230769232,
+    "action_12": 0.6923076923076923,
+    "action_13": 0.5,
+    "action_14": 0.0,
+    "action_15": 0.7692307692307693,
+    "action_16": 0.9615384615384616,
+    "action_17": 0.6538461538461539,
+    "action_18": 0.46153846153846156,
+    "action_19": 0.4230769230769231,
+    "action_20": 0.0
+  },
+  "metadata": {
+    "task": "action_recognition",
+    "sensor": "US40",
+    "fold": 0,
+    "params": {
+      "lstm_layers": [
+        400
+      ],
+      "nepochs": 1,
+      "folds": [
+        0
+      ],
+      "seed": 1337,
+      "dropout": 0.5,
+      "max_len": 404,
+      "bsize": 50,
+      "sensor_data": "US40",
+      "shuffle": true,
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "grad_clip_norm": null,
+      "early_stopping_patience": null,
+      "mask_val": 0.0,
+      "device": "cpu",
+      "raw_data_path": null,
+      "print_summary": false,
+      "save_results": true,
+      "results_root": null,
+      "experiment_name": "validation_action_smoke"
+    }
+  }
+}

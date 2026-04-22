@@ -1,22 +1,16 @@
 """
 PyTorch LSTM baseline for the yichiao test version.
-This does NOT modify the original JhummaLstm.py.
-
-Main goals:
-1. Run a clean smoke test
-2. Use one sensor by default
-3. Avoid saving models/history at first
 """
 
 import random
+
 import numpy as np
 import torch
 import torch.nn as nn
-from torch.utils.data import Dataset, DataLoader
-import glob 
-import scipy.io
+from torch.utils.data import DataLoader, Dataset
 
-import data_loading_yichiao as data_loading
+import LSTM.data_loading_yichiao as data_loading
+import eval_utils_yichiao as eval_utils
 
 
 def set_seed(seed=1337):
@@ -25,45 +19,6 @@ def set_seed(seed=1337):
     torch.manual_seed(seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed_all(seed)
-
-def load_person_files(data_dir):
-    all_x = []
-    all_y_action = []
-    all_y_person = []
-
-    # Map the initials to a unique person ID
-    person_map = {}
-    current_person_id = 0
-    
-    file_paths = glob.glob(f"{data_dir}/data_rot_*.mat")
-
-    for path in file_paths:
-        # Obtain the filename for parsing
-        filename = path.split("/")[-1]
-        parts = filename.replace(".mat", "").split("_")
-
-        # Ensure the file format naming convention is correct
-        initials = parts[2]  # e.g., "AB"
-        action = parts[3]    # e.g., "walk" 
-
-        # Assign int ID to person based on initials
-        if initials not in person_map:
-            person_map[initials] = current_person_id
-            current_person_id += 1
-
-        person_id = person_map[initials]
-
-        # Load the .mat file data
-        mat_data = scipy.io.loadmat(path)
-
-        # Replace 'data' with the actual key in the .mat file that contains the sensor data
-        signal = mat_data['data']  # shape: (timesteps, features)
-
-        all_x.append(signal)
-        all_y_action.append(action)
-        all_y_person.append(person_id)
-
-        return all_x, np.array(all_y_action), np.array(all_y_person), person_map
 
 class SequenceDataset(Dataset):
     def __init__(self, x, y, lengths):
@@ -126,7 +81,7 @@ def _parse_lstm_layers(lstm_layers):
     return hidden_dim, num_layers
 
 
-def train_one_epoch(model, loader, optimizer, criterion, device):
+def train_one_epoch(model, loader, optimizer, criterion, device, grad_clip_norm=None):
     model.train()
 
     running_loss = 0.0
@@ -142,6 +97,8 @@ def train_one_epoch(model, loader, optimizer, criterion, device):
         logits = model(x_batch, lengths)
         loss = criterion(logits, y_batch)
         loss.backward()
+        if grad_clip_norm is not None:
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=grad_clip_norm)
         optimizer.step()
 
         running_loss += loss.item() * y_batch.size(0)
@@ -180,6 +137,26 @@ def evaluate(model, loader, criterion, device):
     return epoch_loss, epoch_acc
 
 
+@torch.no_grad()
+def collect_predictions(model, loader, device):
+    model.eval()
+
+    y_true = []
+    y_pred = []
+
+    for x_batch, y_batch, lengths in loader:
+        logits = model(x_batch.to(device), lengths.to(device))
+        preds = logits.argmax(dim=1).cpu().numpy()
+        y_true.extend(y_batch.cpu().numpy().tolist())
+        y_pred.extend(preds.tolist())
+
+    return y_true, y_pred
+
+
+def _action_label_names():
+    return [f"action_{action_idx + 1}" for action_idx in data_loading.KEEP_ACTIONS]
+
+
 def train_lstm(user_params=None):
     """
     Minimal safe baseline.
@@ -197,10 +174,15 @@ def train_lstm(user_params=None):
         "shuffle": True,
         "lr": 1e-3,
         "weight_decay": 0.0,
+        "grad_clip_norm": None,
+        "early_stopping_patience": None,
         "mask_val": 0.0,
         "device": "cuda" if torch.cuda.is_available() else "cpu",
         "raw_data_path": None,
         "print_summary": True,
+        "save_results": False,
+        "results_root": None,
+        "experiment_name": None,
     }
 
     if user_params:
@@ -222,7 +204,19 @@ def train_lstm(user_params=None):
     )
     x_all = data_loading.normalize(x_all)
 
+    label_names = _action_label_names()
+    experiment_name = params["experiment_name"] or f"sensor_{params['sensor_data'].lower()}"
+    experiment_dir = None
+    if params["save_results"]:
+        experiment_dir = eval_utils.resolve_results_dir(
+            task_name="action_recognition",
+            experiment_name=experiment_name,
+            results_root=params["results_root"],
+        )
+
     results = []
+    aggregate_true = []
+    aggregate_pred = []
 
     for fold in params["folds"]:
         print(f"\n===== FOLD {fold} =====")
@@ -274,13 +268,44 @@ def train_lstm(user_params=None):
             weight_decay=params["weight_decay"],
         )
 
+        history = []
+        best_valid_loss = float("inf")
+        best_valid_acc = -1.0
+        best_epoch = -1
+        patience_counter = 0
+
         for epoch in range(params["nepochs"]):
             train_loss, train_acc = train_one_epoch(
-                model, train_loader, optimizer, criterion, device
+                model,
+                train_loader,
+                optimizer,
+                criterion,
+                device,
+                grad_clip_norm=params["grad_clip_norm"],
             )
             valid_loss, valid_acc = evaluate(
                 model, valid_loader, criterion, device
             )
+
+            history.append(
+                {
+                    "epoch": epoch + 1,
+                    "train_loss": float(train_loss),
+                    "train_acc": float(train_acc),
+                    "valid_loss": float(valid_loss),
+                    "valid_acc": float(valid_acc),
+                }
+            )
+
+            if valid_acc > best_valid_acc:
+                best_valid_acc = valid_acc
+                best_epoch = epoch + 1
+
+            if valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                patience_counter = 0
+            else:
+                patience_counter += 1
 
             print(
                 f"Epoch {epoch + 1}/{params['nepochs']} | "
@@ -288,19 +313,75 @@ def train_lstm(user_params=None):
                 f"valid_loss={valid_loss:.4f} valid_acc={valid_acc:.4f}"
             )
 
+            if (
+                params["early_stopping_patience"] is not None
+                and patience_counter >= params["early_stopping_patience"]
+            ):
+                print(f"Early stopping at epoch {epoch + 1}")
+                break
+
+        valid_true, valid_pred = collect_predictions(model, valid_loader, device)
+        aggregate_true.extend(valid_true)
+        aggregate_pred.extend(valid_pred)
+
         fold_result = {
             "fold": fold,
-            "train_loss": train_loss,
-            "train_acc": train_acc,
-            "valid_loss": valid_loss,
-            "valid_acc": valid_acc,
+            "train_loss": float(train_loss),
+            "train_acc": float(train_acc),
+            "valid_loss": float(valid_loss),
+            "valid_acc": float(valid_acc),
+            "best_valid_acc": float(best_valid_acc),
+            "best_epoch": best_epoch,
+            "history": history,
+            "valid_true": valid_true,
+            "valid_pred": valid_pred,
+            "label_names": label_names,
         }
+
+        if experiment_dir is not None:
+            fold_dir = experiment_dir / f"fold_{fold}"
+            eval_utils.save_history(history, fold_dir)
+            report = eval_utils.save_classification_report(
+                valid_true,
+                valid_pred,
+                label_names,
+                fold_dir,
+                metadata={
+                    "task": "action_recognition",
+                    "sensor": params["sensor_data"],
+                    "fold": fold,
+                    "params": params,
+                },
+            )
+            fold_result["report_summary_path"] = report["summary_path"]
+
         results.append(fold_result)
+
+    if experiment_dir is not None and aggregate_true:
+        eval_utils.save_classification_report(
+            aggregate_true,
+            aggregate_pred,
+            label_names,
+            experiment_dir / "aggregate",
+            metadata={
+                "task": "action_recognition",
+                "sensor": params["sensor_data"],
+                "folds": params["folds"],
+                "params": params,
+            },
+        )
 
     print("\nDone.")
     print("Fold results:")
     for r in results:
-        print(r)
+        print(
+            {
+                "fold": r["fold"],
+                "valid_acc": r["valid_acc"],
+                "best_valid_acc": r["best_valid_acc"],
+                "best_epoch": r["best_epoch"],
+            }
+        )
 
     return results
 

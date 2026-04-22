@@ -67,6 +67,36 @@ def normalize(data, meta=None):
     sigma[sigma == 0] = 1.0
     return np.array([(s - mu) / sigma for s in data], dtype=object)
 
+
+def make_stratified_folds(y, n_splits=5, seed=1337):
+    rng = np.random.default_rng(seed)
+    y = np.asarray(y)
+
+    folds = [[] for _ in range(n_splits)]
+    for cls in np.unique(y):
+        cls_idx = np.where(y == cls)[0].copy()
+        rng.shuffle(cls_idx)
+        parts = np.array_split(cls_idx, n_splits)
+        for fold_id in range(n_splits):
+            folds[fold_id].extend(parts[fold_id].tolist())
+
+    return [np.array(sorted(fold), dtype=np.int64) for fold in folds]
+
+
+def get_fold_split(x, y, meta, fold_indices, fold=0):
+    test_idx = fold_indices[fold]
+    all_idx = np.arange(len(y))
+    train_idx = np.setdiff1d(all_idx, test_idx)
+
+    return (
+        x[train_idx],
+        y[train_idx],
+        x[test_idx],
+        y[test_idx],
+        [meta[i] for i in train_idx],
+        [meta[i] for i in test_idx],
+    )
+
 def pad_for_torch(x, y, max_len=None):
     if max_len is None: max_len = max(s.shape[0] for s in x)
     out = np.zeros((len(x), max_len, x[0].shape[1]), dtype=np.float32)

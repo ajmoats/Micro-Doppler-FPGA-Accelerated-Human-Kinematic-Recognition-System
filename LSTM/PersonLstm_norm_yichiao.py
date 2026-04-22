@@ -10,7 +10,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 from tqdm import tqdm
 
-import data_loading_person_yichiao as data_loading
+import LSTM.data_loading_person_yichiao as data_loading
 
 
 def set_seed(seed=1337):

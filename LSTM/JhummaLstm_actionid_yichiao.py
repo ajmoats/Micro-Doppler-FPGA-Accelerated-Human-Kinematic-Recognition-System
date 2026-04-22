@@ -8,7 +8,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
-import data_loading_actionid_yichiao as data_loading
+import LSTM.data_loading_actionid_yichiao as data_loading
 
 # --- REPRODUCIBILITY ---
 def set_seed(seed=1337):

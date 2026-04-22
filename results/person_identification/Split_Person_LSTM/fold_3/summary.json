@@ -1,0 +1,84 @@
+{
+  "overall_accuracy": 0.15384615384615385,
+  "num_samples": 39,
+  "labels": [
+    "bb",
+    "dm",
+    "gg",
+    "gt",
+    "jm",
+    "jz",
+    "ks",
+    "mc",
+    "tf",
+    "tm"
+  ],
+  "per_class_accuracy": {
+    "bb": 0.0,
+    "dm": 0.25,
+    "gg": 0.0,
+    "gt": 0.5,
+    "jm": 0.0,
+    "jz": 0.5,
+    "ks": 0.0,
+    "mc": 0.0,
+    "tf": 0.25,
+    "tm": 0.0
+  },
+  "metadata": {
+    "task": "person_identification",
+    "sensor": "US40",
+    "fold": 3,
+    "params": {
+      "sensor_data": "US40",
+      "version": 1,
+      "action_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "lstm_layers": [
+        400
+      ],
+      "nepochs": 1,
+      "folds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ],
+      "seed": 1337,
+      "dropout": 0.5,
+      "bsize": 16,
+      "max_len": null,
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "mask_val": 0.0,
+      "device": "cpu",
+      "data_dir": null,
+      "print_summary": true,
+      "save_results": true,
+      "results_root": "results",
+      "experiment_name": "Split_Person_LSTM"
+    }
+  }
+}
