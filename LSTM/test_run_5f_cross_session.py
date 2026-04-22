@@ -22,7 +22,7 @@ def run_parallel_sessions():
     params = {
         "nepochs": 5, "bsize": 16, "lr": 1e-4, "weight_decay": 1e-4,
         "device": "cpu", 
-        "data_dir": "/home/amoats3/Micro-Doppler-FPGA-Accelerated-Human-Kinematic-Recognition-System/data"
+        "data_dir": "../data"
     }
 
     print("--- Phase 1: Loading Separate Sessions ---")

@@ -83,7 +83,27 @@ def _normalize_with_train_stats(train_x, test_x):
     return train_x, test_x
 
 
-def load_cross_session_split(sensor="all", action_indices=None, data_dir=None):
+CROSS_SESSION_PEOPLE = ("dm", "gg", "ks", "tm")
+
+
+def _filter_and_remap_people(x, y, meta, allowed_people):
+    allowed_people = tuple(allowed_people)
+    allowed_set = set(allowed_people)
+    keep_idx = [i for i, sample_meta in enumerate(meta) if sample_meta["person"] in allowed_set]
+    if not keep_idx:
+        raise ValueError(f"No samples found for people={sorted(allowed_people)}")
+
+    filtered_x = x[keep_idx]
+    filtered_meta = [meta[i] for i in keep_idx]
+
+    person_to_id = {person: idx for idx, person in enumerate(allowed_people)}
+    filtered_y = np.array([person_to_id[sample_meta["person"]] for sample_meta in filtered_meta], dtype=np.int64)
+    id_to_person = {idx: person for person, idx in person_to_id.items()}
+
+    return filtered_x, filtered_y, filtered_meta, person_to_id, id_to_person
+
+
+def load_cross_session_split(sensor="all", action_indices=None, data_dir=None, allowed_people=CROSS_SESSION_PEOPLE):
     train_x, train_y, train_meta, person_to_id, id_to_person, _ = data_loading.load_person_dataset(
         sensor=sensor,
         version=1,
@@ -103,11 +123,30 @@ def load_cross_session_split(sensor="all", action_indices=None, data_dir=None):
     if len(test_x) == 0:
         raise ValueError("No test samples were loaded from version 2 files")
 
+    train_x, train_y, train_meta, person_to_id, id_to_person = _filter_and_remap_people(
+        train_x,
+        train_y,
+        train_meta,
+        allowed_people,
+    )
+    test_x, test_y, test_meta, _, _ = _filter_and_remap_people(
+        test_x,
+        test_y,
+        test_meta,
+        allowed_people,
+    )
+
     train_people = {meta["person"] for meta in train_meta}
     test_people = {meta["person"] for meta in test_meta}
-    if train_people != test_people:
+    if train_people != set(allowed_people):
         raise ValueError(
-            f"Train/test person mismatch. train={sorted(train_people)} test={sorted(test_people)}"
+            f"Training session is missing requested people. expected={sorted(allowed_people)} "
+            f"train={sorted(train_people)}"
+        )
+    if test_people != set(allowed_people):
+        raise ValueError(
+            f"Test session is missing requested people. expected={sorted(allowed_people)} "
+            f"test={sorted(test_people)}"
         )
 
     return train_x, train_y, train_meta, test_x, test_y, test_meta, person_to_id, id_to_person
