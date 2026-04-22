@@ -149,6 +149,12 @@ def plot_confusion_matrix(all_labels, all_preds, id_to_person, title="Confusion 
     ax.set_ylabel('True Person (Session 2)')
     ax.set_xlabel('Predicted Person (Session 1 Model)')
     fig.tight_layout()
+    
+    # --- ADD THIS LINE TO SAVE ---
+    plt.savefig('confusion_matrix.png', dpi=300) 
+    print("Graph saved to: confusion_matrix.png")
+    
+    # Keep this if you want it to pop up, but savefig is your insurance
     plt.show()
 
 def train_person_lstm(user_params=None, preloaded_data=None):
