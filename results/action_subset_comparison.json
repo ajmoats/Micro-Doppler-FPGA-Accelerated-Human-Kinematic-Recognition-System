@@ -1,0 +1,44 @@
+[
+  {
+    "experiment": "lunges",
+    "description": "Lunges only (N, NE, NW)",
+    "num_actions": 3,
+    "best_valid_acc": 0.25,
+    "status": "OK"
+  },
+  {
+    "experiment": "leg_steps",
+    "description": "L. Leg Steps + R. Leg Steps",
+    "num_actions": 2,
+    "best_valid_acc": null,
+    "status": "TRAIN FAILED: Target 9 is out of bounds."
+  },
+  {
+    "experiment": "arm_raises_and_punch",
+    "description": "L/R Arm Raises (Fwd + Side) + Punch Fwd",
+    "num_actions": 5,
+    "best_valid_acc": 0.35,
+    "status": "OK"
+  },
+  {
+    "experiment": "walking",
+    "description": "Walk in Place + Walk Fwd + Walk Side + Walk/Pivot x2",
+    "num_actions": 5,
+    "best_valid_acc": 0.35,
+    "status": "OK"
+  },
+  {
+    "experiment": "jumping",
+    "description": "Jumping Jacks + Jump Rope + Jump Fwd/Bwd x3",
+    "num_actions": 5,
+    "best_valid_acc": 0.2,
+    "status": "OK"
+  },
+  {
+    "experiment": "all_actions",
+    "description": "All 21 actions (baseline reference)",
+    "num_actions": 21,
+    "best_valid_acc": 0.38095238095238093,
+    "status": "OK"
+  }
+]

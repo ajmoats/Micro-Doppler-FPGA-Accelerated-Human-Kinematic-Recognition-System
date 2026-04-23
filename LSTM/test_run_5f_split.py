@@ -28,8 +28,9 @@ Action index reference (0-based):
     20 = Punch Fwd (N)
 """
 
-import numpy as np
+import csv
 import json
+import numpy as np
 from pathlib import Path
 
 try:
@@ -72,6 +73,7 @@ ACTION_EXPERIMENTS = {
 }
 
 
+
 # BASE TRAINING PARAMS
 
 BASE_PARAMS = {
@@ -98,7 +100,7 @@ def load_cross_session_data(action_indices, sensor, data_dir):
     """
     Load V1 and V2 data for given action indices,
     then split into cross-session train/test sets.
-    Normalization is computed from training data only.
+    Normalization is computed from training data only — no leakage.
     """
     print(f"  Loading V1 data for actions {action_indices}...")
     x1, y1, m1, p2id, id2p, _ = data_loading.load_person_dataset(
@@ -124,7 +126,7 @@ def load_cross_session_data(action_indices, sensor, data_dir):
 
     tx, ty, vx, vy, tm, vm = data_loading.get_cross_session_split(x_all, y_all, meta_all)
 
-    # Normalize using TRAINING stats only — no leakage into validation
+    # Normalize using TRAINING stats only
     train_flat = np.concatenate(tx, axis=0)
     mu  = train_flat.mean(axis=0)
     std = train_flat.std(axis=0)
@@ -140,22 +142,21 @@ def load_cross_session_data(action_indices, sensor, data_dir):
 def run_action_subset_experiments():
     """
     Main entry point. Runs each action group experiment sequentially
-    and prints a comparison summary at the end.
+    and saves a CSV + JSON summary at the end.
     """
     summary_rows = []
 
     for exp_name, exp_cfg in ACTION_EXPERIMENTS.items():
         print(f"\n{'='*60}")
-        print(f"EXPERIMENT: {exp_name}")
-        print(f"  Actions : {exp_cfg['description']}")
-        print(f"  Indices : {exp_cfg['indices']}")
+        print(f"EXPERIMENT : {exp_name}")
+        print(f"  Actions  : {exp_cfg['description']}")
+        print(f"  Indices  : {exp_cfg['indices']}")
         print(f"{'='*60}")
 
-        # Build params for this experiment
         params = BASE_PARAMS.copy()
         params["experiment_name"] = f"action_subset_{exp_name}"
 
-        # Load data for this action subset
+        # Load and normalize data for this action subset
         try:
             data_payload, id2p = load_cross_session_data(
                 action_indices=exp_cfg["indices"],
@@ -165,62 +166,68 @@ def run_action_subset_experiments():
         except Exception as e:
             print(f"  ERROR loading data: {e}")
             summary_rows.append({
-                "experiment": exp_name,
-                "description": exp_cfg["description"],
-                "num_actions": len(exp_cfg["indices"]),
+                "experiment":     exp_name,
+                "description":    exp_cfg["description"],
+                "num_actions":    len(exp_cfg["indices"]),
                 "best_valid_acc": None,
-                "status": "FAILED",
+                "status":         f"LOAD FAILED: {e}",
             })
             continue
 
-        # Run training — data is already normalized, skip in-loop normalization
-        # by passing as preloaded_data (normalization block inside training
-        # script still runs but is harmless on already-normalized data since
-        # it just re-standardizes with near-identical stats)
+        # Run training
         try:
             results = personlstm.train_person_lstm(
                 user_params=params,
                 preloaded_data=data_payload,
             )
             best_acc = max(r["best_valid_acc"] for r in results)
-            print(f"\n  >>> {exp_name} best valid acc: {best_acc:.4f}")
+            print(f"  >>> {exp_name} best valid acc: {best_acc:.4f}")
 
             summary_rows.append({
-                "experiment": exp_name,
-                "description": exp_cfg["description"],
-                "num_actions": len(exp_cfg["indices"]),
+                "experiment":     exp_name,
+                "description":    exp_cfg["description"],
+                "num_actions":    len(exp_cfg["indices"]),
                 "best_valid_acc": float(best_acc),
-                "status": "OK",
+                "status":         "OK",
             })
 
         except Exception as e:
             print(f"  ERROR during training: {e}")
             summary_rows.append({
-                "experiment": exp_name,
-                "description": exp_cfg["description"],
-                "num_actions": len(exp_cfg["indices"]),
+                "experiment":     exp_name,
+                "description":    exp_cfg["description"],
+                "num_actions":    len(exp_cfg["indices"]),
                 "best_valid_acc": None,
-                "status": f"FAILED: {e}",
+                "status":         f"TRAIN FAILED: {e}",
             })
 
+    
+    # SAVE RESULTS TO CSV AND JSON
+    
+    results_dir = Path(BASE_PARAMS["results_root"])
+    results_dir.mkdir(parents=True, exist_ok=True)
 
-    # FINAL SUMMARY
-    print(f"\n{'='*60}")
-    print("EXPERIMENT SUMMARY — Action Subset Comparison")
-    print(f"{'='*60}")
-    print(f"{'Experiment':<30} {'Actions':>7} {'Best Acc':>10}  Description")
-    print("-" * 80)
+    csv_path = results_dir / "action_subset_comparison.csv"
+    csv_fields = ["experiment", "description", "num_actions", "best_valid_acc", "status"]
 
-    for row in summary_rows:
-        acc_str = f"{row['best_valid_acc']:.4f}" if row["best_valid_acc"] is not None else "FAILED"
-        print(f"{row['experiment']:<30} {row['num_actions']:>7} {acc_str:>10}  {row['description']}")
+    with open(csv_path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.DictWriter(f, fieldnames=csv_fields)
+        writer.writeheader()
+        for row in summary_rows:
+            writer.writerow({
+                "experiment":     row["experiment"],
+                "description":    row["description"],
+                "num_actions":    row["num_actions"],
+                "best_valid_acc": f"{row['best_valid_acc']:.4f}" if row["best_valid_acc"] is not None else "FAILED",
+                "status":         row["status"],
+            })
 
-    # Save summary to JSON
-    summary_path = Path(BASE_PARAMS["results_root"]) / "action_subset_comparison.json"
-    summary_path.parent.mkdir(parents=True, exist_ok=True)
-    with open(summary_path, "w") as f:
+    json_path = results_dir / "action_subset_comparison.json"
+    with open(json_path, "w", encoding="utf-8") as f:
         json.dump(summary_rows, f, indent=2)
-    print(f"\nSummary saved to: {summary_path}")
+
+    print(f"\nCSV  saved to : {csv_path}")
+    print(f"JSON saved to : {json_path}")
 
     return summary_rows
 

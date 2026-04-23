@@ -1,0 +1,80 @@
+{
+  "overall_accuracy": 0.25,
+  "num_samples": 12,
+  "labels": [
+    "bb",
+    "dm",
+    "gg",
+    "gt",
+    "jm",
+    "jz",
+    "ks",
+    "mc",
+    "tf",
+    "tm"
+  ],
+  "per_class_accuracy": {
+    "bb": 0.0,
+    "dm": 0.3333333333333333,
+    "gg": 0.3333333333333333,
+    "gt": 0.0,
+    "jm": 0.0,
+    "jz": 0.0,
+    "ks": 0.0,
+    "mc": 0.0,
+    "tf": 0.0,
+    "tm": 0.3333333333333333
+  },
+  "metadata": {
+    "task": "person_identification",
+    "sensor": "all",
+    "fold": 0,
+    "params": {
+      "sensor_data": "all",
+      "version": 1,
+      "action_indices": [
+        0,
+        1,
+        2,
+        3,
+        4,
+        5,
+        6,
+        7,
+        8,
+        9,
+        10,
+        11,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        18,
+        19,
+        20
+      ],
+      "lstm_layers": [
+        400
+      ],
+      "nepochs": 5,
+      "folds": [
+        0
+      ],
+      "seed": 1337,
+      "dropout": 0.5,
+      "bsize": 16,
+      "max_len": null,
+      "lr": 0.001,
+      "weight_decay": 0.0,
+      "mask_val": 0.0,
+      "device": "cpu",
+      "data_dir": null,
+      "print_summary": false,
+      "save_results": true,
+      "results_root": "results",
+      "experiment_name": "action_subset_lunges"
+    }
+  }
+}

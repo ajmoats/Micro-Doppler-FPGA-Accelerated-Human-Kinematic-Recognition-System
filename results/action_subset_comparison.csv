@@ -1,0 +1,7 @@
+experiment,description,num_actions,best_valid_acc,status
+lunges,"Lunges only (N, NE, NW)",3,0.2500,OK
+leg_steps,L. Leg Steps + R. Leg Steps,2,FAILED,TRAIN FAILED: Target 9 is out of bounds.
+arm_raises_and_punch,L/R Arm Raises (Fwd + Side) + Punch Fwd,5,0.3500,OK
+walking,Walk in Place + Walk Fwd + Walk Side + Walk/Pivot x2,5,0.3500,OK
+jumping,Jumping Jacks + Jump Rope + Jump Fwd/Bwd x3,5,0.2000,OK
+all_actions,All 21 actions (baseline reference),21,0.3810,OK
