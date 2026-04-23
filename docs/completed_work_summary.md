@@ -43,12 +43,15 @@ Completed work in this track includes:
 - building a dedicated PyTorch LSTM training path for person identification
 - running smoke-test and baseline experiments for person ID
 - running full 5-fold all-sensor evaluation
+- updating the cross-session runner to train and test only on the overlapping version-2 participant subset: `dm`, `gg`, `ks`, and `tm`
+- remapping that cross-session configuration to a 4-class label space so train/test labels stay aligned
 
 Completed dataset assumptions:
 
 - use `*_1.mat` files for consistency across participants
 - use actions `1` through `21`
 - exclude the last two freestyle actions
+- for the current cross-session runner, restrict both sessions to the version-2 overlap set: `dm`, `gg`, `ks`, `tm`
 
 Current completed person-ID results reflected in `results/`:
 
@@ -57,6 +60,12 @@ Current completed person-ID results reflected in `results/`:
 - `Split_Person_LSTM_ALL`: 5-fold person-ID run using all sensors with aggregate accuracy `34.15%`
 
 These saved runs show that person identification is feasible offline, and that combining all three sensors improves performance relative to `US40` alone in the current tracked results.
+
+Cross-session status:
+
+- `LSTM/PersonLstm_Cross.py` now filters both training and test splits to `dm`, `gg`, `ks`, and `tm`
+- the verified loader output for that configuration is `84` training samples from version `1` and `84` test samples from version `2`
+- full cross-session training was not completed in this update, so no new saved accuracy result has been added to `results/`
 
 ## 3. Evaluation and Reporting Improvements
 
@@ -108,6 +117,7 @@ Completed:
 - person-ID smoke testing
 - person-ID 5-fold `US40` baseline saved under `results/person_identification/Split_Person_US40`
 - person-ID 5-fold all-sensor baseline saved under `results/person_identification/Split_Person_LSTM_ALL`
+- cross-session person-ID loader updated to the shared version-1/version-2 participant subset (`dm`, `gg`, `ks`, `tm`) with verified `84`/`84` sample splits
 - saved evaluation artifacts and summary reports
 - live collection demo helper and documentation
 - repo organization for legacy vs. active experiment code
@@ -116,5 +126,5 @@ Not yet completed:
 
 - source-separated single-action evaluation cleanup
 - broader overfitting mitigation experiments 
-- saved cross-session evaluation results with version `2` files **in progress**
+- saved cross-session evaluation results for the `dm`/`gg`/`ks`/`tm` subset **in progress**
 - FPGA-oriented model simplification or deployment work
