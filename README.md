@@ -17,3 +17,8 @@ The software baseline established significant performance gains through multi-se
 
 ## Instructions
 Be sure to drag the "data_rot_chunks10.mat" data file into the same folder.
+
+## The Team
+![Team Group Photo](20260408.jpg)
+
+*Left to Right: Alexis Moats, Gabrielle Chavez, YiChiao Wang*
